@@ -263,7 +263,7 @@ def OnGenerateClick(control, event):
         if parent_name and parent_name in g_vmc.models:
             m.Parent = g_vmc.models[parent_name]
             
-    if "Root" in g_vmc.bone_data_cache and "Root" not in g_vmc.models:
+    if "Root" not in g_vmc.models:
         m = FBModelNull("VMC_Root")
         m.Show = True
         m.Size = 50.0
