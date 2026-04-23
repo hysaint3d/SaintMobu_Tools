@@ -1,0 +1,523 @@
+import sys
+import socket
+import struct
+import math
+import time
+from pyfbsdk import *
+from pyfbsdk_additions import *
+
+# ── Global State ──────────────────────────────────────────────────────────────
+class Mobu2VMCState:
+    def __init__(self):
+        self.sock           = None
+        self.is_sending     = False
+        self.target_ip      = "127.0.0.1"
+        self.target_port    = 39539
+        self.bone_cache     = {}
+        self.root_cache     = None
+        self.frame_count    = 0
+        self.fps_limit      = 30
+        self.last_send_time = 0.0
+
+if hasattr(sys, "mobu2vmc_state") and sys.mobu2vmc_state is not None:
+    try: FBSystem().OnUIIdle.Remove(sys.mobu2vmc_idle_func)
+    except: pass
+    if sys.mobu2vmc_state.sock:
+        try: sys.mobu2vmc_state.sock.close()
+        except: pass
+
+sys.mobu2vmc_state = Mobu2VMCState()
+g_sender = sys.mobu2vmc_state
+g_ui = {}
+
+# ── Data Tables ───────────────────────────────────────────────────────────────
+VMC_BONE_NAMES = set([
+    "Hips","Spine","Chest","UpperChest","Neck","Head",
+    "LeftEye","RightEye","Jaw",
+    "LeftShoulder","LeftUpperArm","LeftLowerArm","LeftHand",
+    "RightShoulder","RightUpperArm","RightLowerArm","RightHand",
+    "LeftUpperLeg","LeftLowerLeg","LeftFoot","LeftToes",
+    "RightUpperLeg","RightLowerLeg","RightFoot","RightToes",
+    "LeftThumbProximal","LeftThumbIntermediate","LeftThumbDistal",
+    "LeftIndexProximal","LeftIndexIntermediate","LeftIndexDistal",
+    "LeftMiddleProximal","LeftMiddleIntermediate","LeftMiddleDistal",
+    "LeftRingProximal","LeftRingIntermediate","LeftRingDistal",
+    "LeftLittleProximal","LeftLittleIntermediate","LeftLittleDistal",
+    "RightThumbProximal","RightThumbIntermediate","RightThumbDistal",
+    "RightIndexProximal","RightIndexIntermediate","RightIndexDistal",
+    "RightMiddleProximal","RightMiddleIntermediate","RightMiddleDistal",
+    "RightRingProximal","RightRingIntermediate","RightRingDistal",
+    "RightLittleProximal","RightLittleIntermediate","RightLittleDistal",
+])
+
+# Standard T-Pose global positions (cm, Y-up, ~170cm character)
+STANDARD_POSITIONS = {
+    "Hips":(0,96,0),"Spine":(0,104,0),"Chest":(0,116,0),"UpperChest":(0,126,0),
+    "Neck":(0,140,0),"Head":(0,150,0),
+    "RightEye":(-3,158,7),"LeftEye":(3,158,7),"Jaw":(0,148,5),
+    "RightShoulder":(-7,137,0),"RightUpperArm":(-18,137,0),
+    "RightLowerArm":(-42,137,0),"RightHand":(-64,137,0),
+    "LeftShoulder":(7,137,0),"LeftUpperArm":(18,137,0),
+    "LeftLowerArm":(42,137,0),"LeftHand":(64,137,0),
+    "RightUpperLeg":(-9,96,0),"RightLowerLeg":(-9,52,0),
+    "RightFoot":(-9,8,0),"RightToes":(-9,0,8),
+    "LeftUpperLeg":(9,96,0),"LeftLowerLeg":(9,52,0),
+    "LeftFoot":(9,8,0),"LeftToes":(9,0,8),
+    # Left Fingers (Left=+X, all joints at Y=137)
+    "LeftThumbProximal":(66,137,3),"LeftThumbIntermediate":(68,137,5),"LeftThumbDistal":(70,137,7),
+    "LeftIndexProximal":(68,137,2),"LeftIndexIntermediate":(72,137,2),"LeftIndexDistal":(75,137,2),
+    "LeftMiddleProximal":(68,137,0),"LeftMiddleIntermediate":(72,137,0),"LeftMiddleDistal":(75,137,0),
+    "LeftRingProximal":(68,137,-2),"LeftRingIntermediate":(72,137,-2),"LeftRingDistal":(75,137,-2),
+    "LeftLittleProximal":(67,137,-4),"LeftLittleIntermediate":(70,137,-4),"LeftLittleDistal":(73,137,-4),
+    # Right Fingers (Right=-X, mirror)
+    "RightThumbProximal":(-66,137,3),"RightThumbIntermediate":(-68,137,5),"RightThumbDistal":(-70,137,7),
+    "RightIndexProximal":(-68,137,2),"RightIndexIntermediate":(-72,137,2),"RightIndexDistal":(-75,137,2),
+    "RightMiddleProximal":(-68,137,0),"RightMiddleIntermediate":(-72,137,0),"RightMiddleDistal":(-75,137,0),
+    "RightRingProximal":(-68,137,-2),"RightRingIntermediate":(-72,137,-2),"RightRingDistal":(-75,137,-2),
+    "RightLittleProximal":(-67,137,-4),"RightLittleIntermediate":(-70,137,-4),"RightLittleDistal":(-73,137,-4),
+}
+
+UNITY_HIERARCHY = {
+    "Hips":None,"Spine":"Hips","Chest":"Spine","UpperChest":"Chest",
+    "Neck":"UpperChest","Head":"Neck",
+    "LeftEye":"Head","RightEye":"Head","Jaw":"Head",
+    "LeftShoulder":"UpperChest","LeftUpperArm":"LeftShoulder",
+    "LeftLowerArm":"LeftUpperArm","LeftHand":"LeftLowerArm",
+    "RightShoulder":"UpperChest","RightUpperArm":"RightShoulder",
+    "RightLowerArm":"RightUpperArm","RightHand":"RightLowerArm",
+    "LeftUpperLeg":"Hips","LeftLowerLeg":"LeftUpperLeg",
+    "LeftFoot":"LeftLowerLeg","LeftToes":"LeftFoot",
+    "RightUpperLeg":"Hips","RightLowerLeg":"RightUpperLeg",
+    "RightFoot":"RightLowerLeg","RightToes":"RightFoot",
+    # Left Fingers
+    "LeftThumbProximal":"LeftHand","LeftThumbIntermediate":"LeftThumbProximal","LeftThumbDistal":"LeftThumbIntermediate",
+    "LeftIndexProximal":"LeftHand","LeftIndexIntermediate":"LeftIndexProximal","LeftIndexDistal":"LeftIndexIntermediate",
+    "LeftMiddleProximal":"LeftHand","LeftMiddleIntermediate":"LeftMiddleProximal","LeftMiddleDistal":"LeftMiddleIntermediate",
+    "LeftRingProximal":"LeftHand","LeftRingIntermediate":"LeftRingProximal","LeftRingDistal":"LeftRingIntermediate",
+    "LeftLittleProximal":"LeftHand","LeftLittleIntermediate":"LeftLittleProximal","LeftLittleDistal":"LeftLittleIntermediate",
+    # Right Fingers
+    "RightThumbProximal":"RightHand","RightThumbIntermediate":"RightThumbProximal","RightThumbDistal":"RightThumbIntermediate",
+    "RightIndexProximal":"RightHand","RightIndexIntermediate":"RightIndexProximal","RightIndexDistal":"RightIndexIntermediate",
+    "RightMiddleProximal":"RightHand","RightMiddleIntermediate":"RightMiddleProximal","RightMiddleDistal":"RightMiddleIntermediate",
+    "RightRingProximal":"RightHand","RightRingIntermediate":"RightRingProximal","RightRingDistal":"RightRingIntermediate",
+    "RightLittleProximal":"RightHand","RightLittleIntermediate":"RightLittleProximal","RightLittleDistal":"RightLittleIntermediate",
+}
+
+HIK_MAPPING = {
+    "Hips":"HipsLink","Spine":"SpineLink","Chest":"Spine1Link",
+    "UpperChest":"Spine2Link","Neck":"NeckLink","Head":"HeadLink",
+    "LeftShoulder":"LeftShoulderLink","LeftUpperArm":"LeftArmLink",
+    "LeftLowerArm":"LeftForeArmLink","LeftHand":"LeftHandLink",
+    "RightShoulder":"RightShoulderLink","RightUpperArm":"RightArmLink",
+    "RightLowerArm":"RightForeArmLink","RightHand":"RightHandLink",
+    "LeftUpperLeg":"LeftUpLegLink","LeftLowerLeg":"LeftLegLink",
+    "LeftFoot":"LeftFootLink","LeftToes":"LeftToeBaseLink",
+    "RightUpperLeg":"RightUpLegLink","RightLowerLeg":"RightLegLink",
+    "RightFoot":"RightFootLink","RightToes":"RightToeBaseLink",
+    "LeftThumbProximal":"LeftHandThumb1Link","LeftThumbIntermediate":"LeftHandThumb2Link","LeftThumbDistal":"LeftHandThumb3Link",
+    "LeftIndexProximal":"LeftHandIndex1Link","LeftIndexIntermediate":"LeftHandIndex2Link","LeftIndexDistal":"LeftHandIndex3Link",
+    "LeftMiddleProximal":"LeftHandMiddle1Link","LeftMiddleIntermediate":"LeftHandMiddle2Link","LeftMiddleDistal":"LeftHandMiddle3Link",
+    "LeftRingProximal":"LeftHandRing1Link","LeftRingIntermediate":"LeftHandRing2Link","LeftRingDistal":"LeftHandRing3Link",
+    "LeftLittleProximal":"LeftHandPinky1Link","LeftLittleIntermediate":"LeftHandPinky2Link","LeftLittleDistal":"LeftHandPinky3Link",
+    "RightThumbProximal":"RightHandThumb1Link","RightThumbIntermediate":"RightHandThumb2Link","RightThumbDistal":"RightHandThumb3Link",
+    "RightIndexProximal":"RightHandIndex1Link","RightIndexIntermediate":"RightHandIndex2Link","RightIndexDistal":"RightHandIndex3Link",
+    "RightMiddleProximal":"RightHandMiddle1Link","RightMiddleIntermediate":"RightHandMiddle2Link","RightMiddleDistal":"RightHandMiddle3Link",
+    "RightRingProximal":"RightHandRing1Link","RightRingIntermediate":"RightHandRing2Link","RightRingDistal":"RightHandRing3Link",
+    "RightLittleProximal":"RightHandPinky1Link","RightLittleIntermediate":"RightHandPinky2Link","RightLittleDistal":"RightHandPinky3Link",
+}
+
+# ── OSC Encoding ──────────────────────────────────────────────────────────────
+def encode_osc_str(s):
+    b = s.encode('utf-8') + b'\x00'
+    pad = (4 - len(b) % 4) % 4
+    return b + b'\x00' * pad
+
+def encode_bone_msg(address, bone_name, px, py, pz, qx, qy, qz, qw):
+    return (encode_osc_str(address) +
+            encode_osc_str(",sfffffff") +
+            encode_osc_str(bone_name) +
+            struct.pack('>7f', px, py, pz, qx, qy, qz, qw))
+
+# ── Coordinate Conversion ─────────────────────────────────────────────────────
+def euler_to_quat(ex_deg, ey_deg, ez_deg):
+    ex = math.radians(ex_deg)
+    ey = math.radians(ey_deg)
+    ez = math.radians(ez_deg)
+    cx=math.cos(ex*.5); sx=math.sin(ex*.5)
+    cy=math.cos(ey*.5); sy=math.sin(ey*.5)
+    cz=math.cos(ez*.5); sz=math.sin(ez*.5)
+    qw = cx*cy*cz + sx*sy*sz
+    qx = sx*cy*cz - cx*sy*sz
+    qy = cx*sy*cz + sx*cy*sz
+    qz = cx*cy*sz - sx*sy*cz
+    return qx, qy, qz, qw
+
+def mb_to_vmc(model):
+    pos = FBVector3d(); rot = FBVector3d()
+    model.GetVector(pos, FBModelTransformationType.kModelTranslation, False)
+    model.GetVector(rot, FBModelTransformationType.kModelRotation,    False)
+    # Position: negate X to convert Left=+X (MB) → Left=-X (VMC), negate Z for handedness
+    vmc_px = -pos[0] / 100.0
+    vmc_py =  pos[1] / 100.0
+    vmc_pz = -pos[2] / 100.0
+    qx, qy, qz, qw = euler_to_quat(rot[0], rot[1], rot[2])
+    # Y=180 frame correction: (-qx, qy, -qz, qw) then VMC negate(qz,qw) → (-qx, qy, qz, -qw)
+    return vmc_px, vmc_py, vmc_pz, -qx, qy, qz, -qw
+
+# ── Scene Scan ────────────────────────────────────────────────────────────────
+def scan_vmc_bones():
+    root_model = None
+    bones = {}
+    try:
+        for comp in FBSystem().Scene.Components:
+            try:
+                if not isinstance(comp, FBModel): continue
+                name = comp.Name
+                if name == "VMC_Root":
+                    root_model = comp
+                elif name.startswith("VMC_"):
+                    bn = name[4:]
+                    if bn in VMC_BONE_NAMES:
+                        bones[bn] = comp
+            except: continue
+    except: pass
+    return root_model, bones
+
+# ── Generate Standard Skeleton ────────────────────────────────────────────────
+def OnGenerateSkeletonClick(control, event):
+    # Check if VMC_Root already exists
+    for comp in FBSystem().Scene.Components:
+        try:
+            if isinstance(comp, FBModel) and comp.Name == "VMC_Root":
+                FBMessageBox("Warning",
+                    "VMC_Root already exists in scene!\n"
+                    "Please delete it first before generating.", "OK")
+                return
+        except: continue
+
+    models = {}
+
+    # Create Root null (no rotation, matching VMC2Mobu convention)
+    root = FBModelNull("VMC_Root")
+    root.Show = True; root.Size = 50.0
+    models["Root"] = root
+
+    # Create skeleton bones and set global world positions
+    for b_name, pos in STANDARD_POSITIONS.items():
+        m = FBModelSkeleton("VMC_" + b_name)
+        m.Show = True; m.Size = 50.0
+        m.SetVector(FBVector3d(pos[0], pos[1], pos[2]),
+                    FBModelTransformationType.kModelTranslation, False)
+        models[b_name] = m
+
+    # Establish hierarchy (parenting adjusts local transforms automatically)
+    for b_name, parent_name in UNITY_HIERARCHY.items():
+        if b_name not in models: continue
+        if parent_name is None:
+            models[b_name].Parent = root  # Hips → Root
+        elif parent_name in models:
+            models[b_name].Parent = models[parent_name]
+
+    # Zero all rotations (T-Pose)
+    for b_name, m in models.items():
+        m.SetVector(FBVector3d(0, 0, 0),
+                    FBModelTransformationType.kModelRotation, False)
+
+    FBSystem().Scene.Evaluate()
+    FBMessageBox("Success",
+        "Standard VMC skeleton generated!\n"
+        "Bones: {} + VMC_Root".format(len(STANDARD_POSITIONS)), "OK")
+
+# ── Characterize HIK ──────────────────────────────────────────────────────────
+def OnCharacterizeClick(control, event):
+    root_model, bones = scan_vmc_bones()
+    if not bones:
+        FBMessageBox("Warning",
+            "No VMC_ skeleton found!\nPlease generate or load a VMC skeleton first.", "OK")
+        return
+
+    char_name = "VMC_HIK_Character"
+    char = None
+    for c in FBSystem().Scene.Characters:
+        if c.Name == char_name:
+            char = c; break
+
+    if not char:
+        char = FBCharacter(char_name)
+
+    char.SetCharacterizeOn(False)
+
+    # Map bones to HIK slots
+    for vmc_name, prop_name in HIK_MAPPING.items():
+        if vmc_name not in bones: continue
+        model = bones[vmc_name]
+        prop  = char.PropertyList.Find(prop_name)
+        if prop:
+            prop.removeAll()
+            try:    prop.append(model)
+            except: prop.insert(model)
+        else:
+            base = prop_name.replace("Link","")
+            for p in char.PropertyList:
+                if p.Name.endswith("Link") and base in p.Name:
+                    p.removeAll()
+                    try:    p.append(model)
+                    except: p.insert(model)
+                    break
+
+    # Handle Spine fallback
+    if "Spine" not in bones and "Chest" in bones:
+        prop = char.PropertyList.Find("SpineLink")
+        if prop:
+            prop.removeAll()
+            try:    prop.append(bones["Chest"])
+            except: prop.insert(bones["Chest"])
+
+    # Force T-Pose: all bones and root to zero rotation
+    for b_name, m in bones.items():
+        m.SetVector(FBVector3d(0,0,0),
+                    FBModelTransformationType.kModelRotation, False)
+    if root_model:
+        root_model.SetVector(FBVector3d(0,0,0),
+                             FBModelTransformationType.kModelRotation, False)
+
+    # Map VMC_Root to HIK Reference node
+    if root_model:
+        ref_prop = char.PropertyList.Find("ReferenceLink")
+        if ref_prop is None:
+            # Fallback: scan all properties for any containing "Reference"
+            for p in char.PropertyList:
+                if "Reference" in p.Name:
+                    ref_prop = p
+                    print("Mobu2VMC: Found Reference property:", p.Name)
+                    break
+        if ref_prop is not None:
+            ref_prop.removeAll()
+            try:
+                ref_prop.append(root_model)
+                print("Mobu2VMC: ReferenceLink -> VMC_Root [OK]")
+            except:
+                try:
+                    ref_prop.insert(root_model)
+                    print("Mobu2VMC: ReferenceLink -> VMC_Root [OK via insert]")
+                except Exception as e:
+                    print("Mobu2VMC: ReferenceLink failed:", e)
+        else:
+            print("Mobu2VMC: ReferenceLink property NOT found")
+
+    FBSystem().Scene.Evaluate()
+
+    success = char.SetCharacterizeOn(True)
+    if success:
+        FBMessageBox("Success", "HIK Characterized Successfully!", "OK")
+    else:
+        err = char.GetCharacterizeError()
+        print("CHARACTERIZE ERROR:", err)
+        FBMessageBox("Warning",
+            "Characterization failed.\nError: " + str(err) +
+            "\nCheck Python Console.", "OK")
+
+# ── FPS Selection ─────────────────────────────────────────────────────────────
+def set_fps(fps):
+    g_sender.fps_limit = fps
+    g_ui["btn_fps24"].Caption = "[24]" if fps == 24 else " 24 "
+    g_ui["btn_fps30"].Caption = "[30]" if fps == 30 else " 30 "
+    g_ui["btn_fps60"].Caption = "[60]" if fps == 60 else " 60 "
+
+def OnFPS24Click(c, e): set_fps(24)
+def OnFPS30Click(c, e): set_fps(30)
+def OnFPS60Click(c, e): set_fps(60)
+
+# ── Send Loop ─────────────────────────────────────────────────────────────────
+def OnSendUIIdle(control, event):
+    if not g_sender.is_sending or not g_sender.sock:
+        return
+
+    # FPS throttle
+    now = time.time()
+    if now - g_sender.last_send_time < (1.0 / g_sender.fps_limit):
+        return
+    g_sender.last_send_time = now
+
+    target = (g_sender.target_ip, g_sender.target_port)
+    sent   = 0
+
+    if g_sender.root_cache:
+        try:
+            px,py,pz,qx,qy,qz,qw = mb_to_vmc(g_sender.root_cache)
+            g_sender.sock.sendto(
+                encode_bone_msg("/VMC/Ext/Root/Pos","VRMAvatar",px,py,pz,qx,qy,qz,qw), target)
+            sent += 1
+        except: pass
+
+    for bone_name, model in g_sender.bone_cache.items():
+        try:
+            px,py,pz,qx,qy,qz,qw = mb_to_vmc(model)
+            g_sender.sock.sendto(
+                encode_bone_msg("/VMC/Ext/Bone/Pos",bone_name,px,py,pz,qx,qy,qz,qw), target)
+            sent += 1
+        except: pass
+
+    g_sender.frame_count += 1
+    if g_sender.frame_count % 60 == 0:
+        try:
+            g_ui["lbl_status"].Caption = "Sending: {} msgs @ {}fps -> {}:{}".format(
+                sent, g_sender.fps_limit,
+                g_sender.target_ip, g_sender.target_port)
+        except:
+            try: FBSystem().OnUIIdle.Remove(OnSendUIIdle)
+            except: pass
+
+# ── Button Callbacks ──────────────────────────────────────────────────────────
+def OnScanClick(control, event):
+    root_model, bones = scan_vmc_bones()
+    total = (1 if root_model else 0) + len(bones)
+    if total == 0:
+        FBMessageBox("Scan Result",
+            "No VMC_ bones found in scene.\n\n"
+            "Please click 'Generate Skeleton'\n"
+            "to create a standard VMC skeleton.", "OK")
+        return
+    lines = ["Found {} VMC_ model(s):".format(total)]
+    if root_model: lines.append("  [Root]  VMC_Root")
+    for b in sorted(bones.keys()): lines.append("  [Bone]  VMC_" + b)
+    FBMessageBox("Scan Result", "\n".join(lines), "OK")
+
+def OnStartSendClick(control, event):
+    if g_sender.is_sending: return
+    root_model, bones = scan_vmc_bones()
+    if not root_model and not bones:
+        FBMessageBox("Warning",
+            "No VMC_ skeleton found in scene!\n"
+            "Please use 'Generate Skeleton' first.", "OK")
+        return
+    try:
+        g_sender.target_ip   = g_ui["edit_ip"].Text
+        g_sender.target_port = int(g_ui["edit_port"].Value)
+        g_sender.root_cache  = root_model
+        g_sender.bone_cache  = bones
+        g_sender.sock        = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        g_sender.is_sending  = True
+        g_sender.frame_count = 0
+        g_sender.last_send_time = 0.0
+
+        g_ui["btn_start"].Caption = "Sending..."
+        g_ui["btn_start"].Enabled = False
+        g_ui["btn_stop"].Enabled  = True
+        g_ui["lbl_status"].Caption = "Status: Sending to {}:{} ({} bones, {}fps)".format(
+            g_sender.target_ip, g_sender.target_port,
+            len(bones), g_sender.fps_limit)
+
+        fb_sys = FBSystem()
+        fb_sys.OnUIIdle.Remove(OnSendUIIdle)
+        fb_sys.OnUIIdle.Add(OnSendUIIdle)
+        import sys as python_sys
+        python_sys.mobu2vmc_idle_func = OnSendUIIdle
+
+        print("Mobu2VMC: Sending to {}:{} | bones:{} fps:{}".format(
+            g_sender.target_ip, g_sender.target_port, len(bones), g_sender.fps_limit))
+    except Exception as e:
+        g_ui["lbl_status"].Caption = "Error: " + str(e)
+        print("Mobu2VMC start error:", e)
+
+def OnStopSendClick(control, event):
+    g_sender.is_sending = False
+    if g_sender.sock:
+        try: g_sender.sock.close()
+        except: pass
+        g_sender.sock = None
+    try: FBSystem().OnUIIdle.Remove(OnSendUIIdle)
+    except: pass
+    g_ui["btn_start"].Caption = "Start Sending"
+    g_ui["btn_start"].Enabled = True
+    g_ui["btn_stop"].Enabled  = False
+    g_ui["lbl_status"].Caption = "Status: Stopped"
+    print("Mobu2VMC: Stopped.")
+
+# ── UI ────────────────────────────────────────────────────────────────────────
+def PopulateTool(tool):
+    tool.StartSizeX = 350
+    tool.StartSizeY = 520
+
+    x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft,   "")
+    y = FBAddRegionParam(0, FBAttachType.kFBAttachTop,    "")
+    w = FBAddRegionParam(0, FBAttachType.kFBAttachRight,  "")
+    h = FBAddRegionParam(0, FBAttachType.kFBAttachBottom, "")
+    tool.AddRegion("main","main", x, y, w, h)
+
+    g_ui["main_layout"] = FBVBoxLayout()
+    tool.SetControl("main", g_ui["main_layout"])
+
+    def hdr(text):
+        lbl = FBLabel()
+        lbl.Caption = "--- " + text + " ---"
+        lbl.Justify = FBTextJustify.kFBTextJustifyCenter
+        return lbl
+
+    def btn(caption, cb):
+        b = FBButton(); b.Caption = caption; b.OnClick.Add(cb); return b
+
+    # ── SKELETON buttons
+    g_ui["btn_scan"]  = btn("Scan VMC_ Bones in Scene",     OnScanClick)
+    g_ui["btn_gen"]   = btn("Generate Standard Skeleton",   OnGenerateSkeletonClick)
+    g_ui["btn_char"]  = btn("Characterize HIK",             OnCharacterizeClick)
+
+    # ── Send Target
+    g_ui["lyt_ip"]   = FBHBoxLayout()
+    g_ui["lbl_ip"]   = FBLabel();     g_ui["lbl_ip"].Caption  = "Target IP:"
+    g_ui["edit_ip"]  = FBEdit();      g_ui["edit_ip"].Text    = "127.0.0.1"
+    g_ui["lyt_ip"].Add(g_ui["lbl_ip"], 80); g_ui["lyt_ip"].Add(g_ui["edit_ip"], 180)
+
+    g_ui["lyt_port"]  = FBHBoxLayout()
+    g_ui["lbl_port"]  = FBLabel();      g_ui["lbl_port"].Caption  = "UDP Port:"
+    g_ui["edit_port"] = FBEditNumber(); g_ui["edit_port"].Value    = 39539
+    g_ui["edit_port"].Precision = 0
+    g_ui["lyt_port"].Add(g_ui["lbl_port"], 80); g_ui["lyt_port"].Add(g_ui["edit_port"], 180)
+
+    # ── FPS selector
+    g_ui["lyt_fps"]   = FBHBoxLayout()
+    g_ui["lbl_fps"]   = FBLabel(); g_ui["lbl_fps"].Caption = "Send FPS:"
+    g_ui["btn_fps24"] = FBButton(); g_ui["btn_fps24"].Caption = " 24 "; g_ui["btn_fps24"].OnClick.Add(OnFPS24Click)
+    g_ui["btn_fps30"] = FBButton(); g_ui["btn_fps30"].Caption = "[30]"; g_ui["btn_fps30"].OnClick.Add(OnFPS30Click)
+    g_ui["btn_fps60"] = FBButton(); g_ui["btn_fps60"].Caption = " 60 "; g_ui["btn_fps60"].OnClick.Add(OnFPS60Click)
+    g_ui["lyt_fps"].Add(g_ui["lbl_fps"],   80)
+    g_ui["lyt_fps"].Add(g_ui["btn_fps24"], 55)
+    g_ui["lyt_fps"].Add(g_ui["btn_fps30"], 55)
+    g_ui["lyt_fps"].Add(g_ui["btn_fps60"], 55)
+
+    # ── Start / Stop (side by side)
+    g_ui["lyt_ctrl"]  = FBHBoxLayout()
+    g_ui["btn_start"] = btn("Start Sending", OnStartSendClick)
+    g_ui["btn_stop"]  = btn("Stop",          OnStopSendClick)
+    g_ui["btn_stop"].Enabled = False
+    g_ui["lyt_ctrl"].Add(g_ui["btn_start"], 200)
+    g_ui["lyt_ctrl"].Add(g_ui["btn_stop"],   80)
+
+    g_ui["lbl_status"] = FBLabel(); g_ui["lbl_status"].Caption = "Status: Stopped"
+
+    # ── Layout
+    lay = g_ui["main_layout"]
+    lay.Add(hdr("SKELETON"),              25)
+    lay.Add(g_ui["btn_scan"],             35)
+    lay.Add(g_ui["btn_gen"],              35)
+    lay.Add(g_ui["btn_char"],             35)
+    lay.Add(hdr("SEND & CONTROL"),        25)
+    lay.Add(g_ui["lyt_ip"],              30)
+    lay.Add(g_ui["lyt_port"],            30)
+    lay.Add(g_ui["lyt_fps"],             30)
+    lay.Add(g_ui["lyt_ctrl"],            35)
+    lay.Add(g_ui["lbl_status"],          30)
+
+def CreateTool():
+    tool_name = "Saint's Mobu2VMC Sender"
+    tool = FBCreateUniqueTool(tool_name)
+    if tool:
+        PopulateTool(tool)
+        ShowTool(tool)
+        FBMessageBox("Welcome",
+            "本工具由小聖腦絲與Antigravity協作完成\n"
+            "https://www.facebook.com/hysaint3d.mocap", "OK")
+    else:
+        print("Error creating tool")
+
+CreateTool()
