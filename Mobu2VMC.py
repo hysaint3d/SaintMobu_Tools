@@ -339,8 +339,8 @@ def OnCharacterizeClick(control, event):
 
     success = char.SetCharacterizeOn(True)
 
-    # Restore Root to Y=180 after characterize (VMC convention)
-    if root_model:
+    # Restore Root to Y=180 after characterize ONLY for imported skeletons (VMC2Mobu)
+    if root_model and g_sender.vmc2mobu_mode:
         root_model.SetVector(FBVector3d(0, 180, 0),
                              FBModelTransformationType.kModelRotation, False)
     FBSystem().Scene.Evaluate()
