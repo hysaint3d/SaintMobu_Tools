@@ -18,6 +18,9 @@ class Mobu2VMCState:
         self.frame_count    = 0
         self.fps_limit      = 30
         self.last_send_time = 0.0
+        self.hip_scale_x    = 1.0   # Scale factor for Hips local X (sideways)
+        self.hip_scale_z    = 1.0   # Scale factor for Hips local Z (forward)
+        self.vmc2mobu_mode  = False  # True = VMC2Mobu skeleton (Root Y~180)
 
 if hasattr(sys, "mobu2vmc_state") and sys.mobu2vmc_state is not None:
     try: FBSystem().OnUIIdle.Remove(sys.mobu2vmc_idle_func)
@@ -138,6 +141,12 @@ def encode_bone_msg(address, bone_name, px, py, pz, qx, qy, qz, qw):
             encode_osc_str(bone_name) +
             struct.pack('>7f', px, py, pz, qx, qy, qz, qw))
 
+def encode_ok_msg(loaded, calib_state, calib_mode):
+    """Send /VMC/Ext/OK — tells receiver the sender state (required by VMC spec)."""
+    return (encode_osc_str("/VMC/Ext/OK") +
+            encode_osc_str(",iii") +
+            struct.pack('>3i', loaded, calib_state, calib_mode))
+
 # ── Coordinate Conversion ─────────────────────────────────────────────────────
 def euler_to_quat(ex_deg, ey_deg, ez_deg):
     ex = math.radians(ex_deg)
@@ -153,19 +162,26 @@ def euler_to_quat(ex_deg, ey_deg, ez_deg):
     return qx, qy, qz, qw
 
 def mb_to_vmc(model):
-    pos = FBVector3d(); rot = FBVector3d()
+    pos = FBVector3d()
+    rot = FBVector3d()
     model.GetVector(pos, FBModelTransformationType.kModelTranslation, False)
     model.GetVector(rot, FBModelTransformationType.kModelRotation,    False)
-    # Position: negate X to convert Left=+X (MB) → Left=-X (VMC), negate Z for handedness
     vmc_px = -pos[0] / 100.0
     vmc_py =  pos[1] / 100.0
-    vmc_pz = -pos[2] / 100.0
+    vmc_pz =  pos[2] / 100.0  # Fixed Z-axis inversion
     qx, qy, qz, qw = euler_to_quat(rot[0], rot[1], rot[2])
-    # Y=180 frame correction: (-qx, qy, -qz, qw) then VMC negate(qz,qw) → (-qx, qy, qz, -qw)
-    return vmc_px, vmc_py, vmc_pz, -qx, qy, qz, -qw
+    if g_sender.vmc2mobu_mode:
+        # VMC2Mobu skeleton (Root Y~180): exact inverse of vmc_to_mb
+        return vmc_px, vmc_py, vmc_pz, -qx, -qy, qz, qw
+    else:
+        # New skeleton (Root Y=0): standard MB→VMC handedness flip
+        return vmc_px, vmc_py, vmc_pz, -qx, qy, qz, -qw
 
 # ── Scene Scan ────────────────────────────────────────────────────────────────
 def scan_vmc_bones():
+    """Scan VMC_ bones. Detect skeleton type via VMC_Source property on VMC_Root.
+    If property is 'Mobu2VMC' -> new skeleton (mode=False).
+    If property absent    -> VMC2Mobu imported skeleton (mode=True)."""
     root_model = None
     bones = {}
     try:
@@ -181,6 +197,12 @@ def scan_vmc_bones():
                         bones[bn] = comp
             except: continue
     except: pass
+    if root_model:
+        src_prop = root_model.PropertyList.Find("VMC_Source")
+        is_new = (src_prop is not None and src_prop.Data == "Mobu2VMC")
+        g_sender.vmc2mobu_mode = not is_new
+    else:
+        g_sender.vmc2mobu_mode = False
     return root_model, bones
 
 # ── Generate Standard Skeleton ────────────────────────────────────────────────
@@ -197,12 +219,19 @@ def OnGenerateSkeletonClick(control, event):
 
     models = {}
 
-    # Create Root null (no rotation, matching VMC2Mobu convention)
+    # Create Root null (Y=0 — stable T-pose for HIK characterization)
     root = FBModelNull("VMC_Root")
     root.Show = True; root.Size = 50.0
+    # Stamp a property so Mobu2VMC can identify this as a self-generated skeleton
+    try:
+        p = root.PropertyCreate("VMC_Source", FBPropertyType.kFBPT_charptr, "String", False, True, None)
+        if p: p.Data = "Mobu2VMC"
+    except: pass
     models["Root"] = root
 
-    # Create skeleton bones and set global world positions
+    # Create bones and set positions BEFORE parenting.
+    # With no parent yet, local = world, so STANDARD_POSITIONS are world coords.
+    # Left arm is at +X, right at -X — correct T-pose facing +Z.
     for b_name, pos in STANDARD_POSITIONS.items():
         m = FBModelSkeleton("VMC_" + b_name)
         m.Show = True; m.Size = 50.0
@@ -210,15 +239,15 @@ def OnGenerateSkeletonClick(control, event):
                     FBModelTransformationType.kModelTranslation, False)
         models[b_name] = m
 
-    # Establish hierarchy (parenting adjusts local transforms automatically)
+    # Establish hierarchy — MB auto-computes local positions relative to each parent
     for b_name, parent_name in UNITY_HIERARCHY.items():
         if b_name not in models: continue
         if parent_name is None:
-            models[b_name].Parent = root  # Hips → Root
+            models[b_name].Parent = root
         elif parent_name in models:
             models[b_name].Parent = models[parent_name]
 
-    # Zero all rotations (T-Pose)
+    # Zero all rotations (T-Pose, Root stays Y=0)
     for b_name, m in models.items():
         m.SetVector(FBVector3d(0, 0, 0),
                     FBModelTransformationType.kModelRotation, False)
@@ -226,7 +255,8 @@ def OnGenerateSkeletonClick(control, event):
     FBSystem().Scene.Evaluate()
     FBMessageBox("Success",
         "Standard VMC skeleton generated!\n"
-        "Bones: {} + VMC_Root".format(len(STANDARD_POSITIONS)), "OK")
+        "Bones: {} + VMC_Root\n"
+        "Left arm at +X, facing +Z".format(len(STANDARD_POSITIONS)), "OK")
 
 # ── Characterize HIK ──────────────────────────────────────────────────────────
 def OnCharacterizeClick(control, event):
@@ -273,7 +303,7 @@ def OnCharacterizeClick(control, event):
             try:    prop.append(bones["Chest"])
             except: prop.insert(bones["Chest"])
 
-    # Force T-Pose: all bones and root to zero rotation
+    # Force T-Pose: bones to zero, Root to Y=0 for HIK to characterize correctly.
     for b_name, m in bones.items():
         m.SetVector(FBVector3d(0,0,0),
                     FBModelTransformationType.kModelRotation, False)
@@ -308,8 +338,15 @@ def OnCharacterizeClick(control, event):
     FBSystem().Scene.Evaluate()
 
     success = char.SetCharacterizeOn(True)
+
+    # Restore Root to Y=180 after characterize (VMC convention)
+    if root_model:
+        root_model.SetVector(FBVector3d(0, 180, 0),
+                             FBModelTransformationType.kModelRotation, False)
+    FBSystem().Scene.Evaluate()
+
     if success:
-        FBMessageBox("Success", "HIK Characterized Successfully!", "OK")
+        FBMessageBox("Success", "HIK Characterized Successfully!\nRoot restored to Y=180.", "OK")
     else:
         err = char.GetCharacterizeError()
         print("CHARACTERIZE ERROR:", err)
@@ -342,17 +379,35 @@ def OnSendUIIdle(control, event):
     target = (g_sender.target_ip, g_sender.target_port)
     sent   = 0
 
-    if g_sender.root_cache:
-        try:
-            px,py,pz,qx,qy,qz,qw = mb_to_vmc(g_sender.root_cache)
-            g_sender.sock.sendto(
-                encode_bone_msg("/VMC/Ext/Root/Pos","VRMAvatar",px,py,pz,qx,qy,qz,qw), target)
-            sent += 1
-        except: pass
+    # ── Root: Send Global X and Z translation to Root ──────────
+    root_px, root_pz = 0.0, 0.0
+    if "Hips" in g_sender.bone_cache:
+        hip_global = FBVector3d()
+        g_sender.bone_cache["Hips"].GetVector(hip_global, FBModelTransformationType.kModelTranslation, True)
+        root_px = -hip_global[0] / 100.0
+        root_pz =  hip_global[2] / 100.0  # Fixed Z-axis inversion (Mobu +Z is Forward, Unity +Z is Forward)
 
+    # Apply Global Scale to Root World Translation
+    root_px *= g_sender.hip_scale_x
+    root_pz *= g_sender.hip_scale_z
+
+    g_sender.sock.sendto(
+        encode_bone_msg("/VMC/Ext/Root/Pos","root",root_px,0.0,root_pz,0,0,0,1), target)
+    sent += 1
+
+    # ── Bones: local position + rotation (standard VMC format) ────────────────
     for bone_name, model in g_sender.bone_cache.items():
         try:
             px,py,pz,qx,qy,qz,qw = mb_to_vmc(model)
+            if bone_name == "Hips":
+                # Standard VMC: Root handles world X/Z. Hips handles local Y (height) and rotation.
+                px = 0.0
+                pz = 0.0
+                # py remains unchanged to allow crouching/jumping
+            else:
+                # VMC Spec recommendation: Send 0 for non-root/hips bone positions to preserve receiver's model proportions
+                px, py, pz = 0.0, 0.0, 0.0
+                
             g_sender.sock.sendto(
                 encode_bone_msg("/VMC/Ext/Bone/Pos",bone_name,px,py,pz,qx,qy,qz,qw), target)
             sent += 1
@@ -367,6 +422,13 @@ def OnSendUIIdle(control, event):
         except:
             try: FBSystem().OnUIIdle.Remove(OnSendUIIdle)
             except: pass
+
+# ── Hip Scale ────────────────────────────────────────────────────────────────
+def OnHipScaleXChange(control, event):
+    g_sender.hip_scale_x = control.Value
+
+def OnHipScaleZChange(control, event):
+    g_sender.hip_scale_z = control.Value
 
 # ── Button Callbacks ──────────────────────────────────────────────────────────
 def OnScanClick(control, event):
@@ -434,10 +496,39 @@ def OnStopSendClick(control, event):
     g_ui["lbl_status"].Caption = "Status: Stopped"
     print("Mobu2VMC: Stopped.")
 
+# ── Delete Skeleton ───────────────────────────────────────────────────────────
+def OnDeleteSkeletonClick(control, event):
+    # Stop sending first
+    if g_sender.is_sending:
+        OnStopSendClick(None, None)
+
+    # Delete HIK character first (bones are locked while characterized)
+    char_name = "VMC_HIK_Character"
+    for c in list(FBSystem().Scene.Characters):
+        if c.Name == char_name:
+            try: c.SetCharacterizeOn(False)
+            except: pass
+            try: c.FBDelete()
+            except: pass
+
+    # Delete all VMC_ models from scene
+    deleted = 0
+    for comp in list(FBSystem().Scene.Components):
+        try:
+            if isinstance(comp, FBModel) and comp.Name and comp.Name.startswith("VMC_"):
+                comp.FBDelete()
+                deleted += 1
+        except: pass
+
+    g_sender.bone_cache.clear()
+    g_sender.root_cache = None
+    print("Mobu2VMC: Deleted {} VMC_ objects.".format(deleted))
+    FBMessageBox("Done", "Deleted VMC skeleton ({} objects).".format(deleted), "OK")
+
 # ── UI ────────────────────────────────────────────────────────────────────────
 def PopulateTool(tool):
     tool.StartSizeX = 350
-    tool.StartSizeY = 520
+    tool.StartSizeY = 570
 
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft,   "")
     y = FBAddRegionParam(0, FBAttachType.kFBAttachTop,    "")
@@ -461,6 +552,7 @@ def PopulateTool(tool):
     g_ui["btn_scan"]  = btn("Scan VMC_ Bones in Scene",     OnScanClick)
     g_ui["btn_gen"]   = btn("Generate Standard Skeleton",   OnGenerateSkeletonClick)
     g_ui["btn_char"]  = btn("Characterize HIK",             OnCharacterizeClick)
+    g_ui["btn_del"]   = btn("Delete VMC Skeleton",          OnDeleteSkeletonClick)
 
     # ── Send Target
     g_ui["lyt_ip"]   = FBHBoxLayout()
@@ -485,6 +577,30 @@ def PopulateTool(tool):
     g_ui["lyt_fps"].Add(g_ui["btn_fps30"], 55)
     g_ui["lyt_fps"].Add(g_ui["btn_fps60"], 55)
 
+    # ── Global Position Weight X
+    g_ui["lyt_hip_x"]     = FBHBoxLayout()
+    g_ui["lbl_hip_x"]     = FBLabel(); g_ui["lbl_hip_x"].Caption = "Global Weight X:"
+    g_ui["slider_hip_x"]  = FBEditNumber()
+    g_ui["slider_hip_x"].Min = 0.0
+    g_ui["slider_hip_x"].Max = 2.0
+    g_ui["slider_hip_x"].Value = g_sender.hip_scale_x
+    g_ui["slider_hip_x"].Precision = 2
+    g_ui["slider_hip_x"].OnChange.Add(OnHipScaleXChange)
+    g_ui["lyt_hip_x"].Add(g_ui["lbl_hip_x"],     100)
+    g_ui["lyt_hip_x"].Add(g_ui["slider_hip_x"],  150)
+
+    # ── Global Position Weight Z
+    g_ui["lyt_hip_z"]     = FBHBoxLayout()
+    g_ui["lbl_hip_z"]     = FBLabel(); g_ui["lbl_hip_z"].Caption = "Global Weight Z:"
+    g_ui["slider_hip_z"]  = FBEditNumber()
+    g_ui["slider_hip_z"].Min = 0.0
+    g_ui["slider_hip_z"].Max = 2.0
+    g_ui["slider_hip_z"].Value = g_sender.hip_scale_z
+    g_ui["slider_hip_z"].Precision = 2
+    g_ui["slider_hip_z"].OnChange.Add(OnHipScaleZChange)
+    g_ui["lyt_hip_z"].Add(g_ui["lbl_hip_z"],     100)
+    g_ui["lyt_hip_z"].Add(g_ui["slider_hip_z"],  150)
+
     # ── Start / Stop (side by side)
     g_ui["lyt_ctrl"]  = FBHBoxLayout()
     g_ui["btn_start"] = btn("Start Sending", OnStartSendClick)
@@ -501,10 +617,13 @@ def PopulateTool(tool):
     lay.Add(g_ui["btn_scan"],             35)
     lay.Add(g_ui["btn_gen"],              35)
     lay.Add(g_ui["btn_char"],             35)
+    lay.Add(g_ui["btn_del"],             35)
     lay.Add(hdr("SEND & CONTROL"),        25)
     lay.Add(g_ui["lyt_ip"],              30)
     lay.Add(g_ui["lyt_port"],            30)
     lay.Add(g_ui["lyt_fps"],             30)
+    lay.Add(g_ui["lyt_hip_x"],           30)
+    lay.Add(g_ui["lyt_hip_z"],           30)
     lay.Add(g_ui["lyt_ctrl"],            35)
     lay.Add(g_ui["lbl_status"],          30)
 
