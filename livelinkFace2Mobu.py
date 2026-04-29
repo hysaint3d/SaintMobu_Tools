@@ -111,6 +111,14 @@ def OnUIIdle(control, event):
     # Real-time update for properties
     if "LiveLink_Data" in g_livelink.models:
         ll_node = g_livelink.models["LiveLink_Data"]
+        
+        # Check if MotionBuilder is currently recording
+        is_recording = False
+        try:
+            is_recording = FBPlayerControl().IsRecording
+        except:
+            pass
+            
         try:
             for prop_name, val in g_livelink.livelink_data_cache.items():
                 prop = g_livelink.prop_cache.get(prop_name)
@@ -121,9 +129,17 @@ def OnUIIdle(control, event):
                 if prop:
                     # Only update if the value changed significantly to prevent evaluation lag
                     last_val = g_livelink.last_applied_cache.get(prop_name)
-                    if last_val is None or abs(last_val - val) > 0.001:
+                    value_changed = last_val is None or abs(last_val - val) > 0.001
+                    if value_changed:
                         prop.Data = float(val)
                         g_livelink.last_applied_cache[prop_name] = val
+                        
+                    # If recording, key the property
+                    if is_recording:
+                        try:
+                            prop.Key()
+                        except:
+                            pass
         except:
             pass
 
