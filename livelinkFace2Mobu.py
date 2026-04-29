@@ -25,6 +25,7 @@ class LiveLinkState:
         self.prop_cache = {}
         self.last_ui_update = 0.0
         self.last_applied_cache = {}
+        self.force_recording = False
 
 sys.livelink_state = LiveLinkState()
 g_livelink = sys.livelink_state
@@ -112,10 +113,11 @@ def OnUIIdle(control, event):
     if "LiveLink_Data" in g_livelink.models:
         ll_node = g_livelink.models["LiveLink_Data"]
         
-        # Check if MotionBuilder is currently recording
+        # Check if MotionBuilder is currently recording and playing
         is_recording = False
         try:
-            is_recording = FBPlayerControl().IsRecording
+            player = FBPlayerControl()
+            is_recording = player.IsPlaying and (player.IsRecording or getattr(g_livelink, 'force_recording', False))
         except:
             pass
             
@@ -134,12 +136,12 @@ def OnUIIdle(control, event):
                         prop.Data = float(val)
                         g_livelink.last_applied_cache[prop_name] = val
                         
-                    # If recording, key the property
-                    if is_recording:
-                        try:
-                            prop.Key()
-                        except:
-                            pass
+                        # If recording, key the property
+                        if is_recording:
+                            try:
+                                prop.Key()
+                            except:
+                                pass
         except:
             pass
 
@@ -296,9 +298,63 @@ def OnDeleteDataClick(control, event):
     
     FBMessageBox("Success", "Cleaned up LiveLink_Data and reset Network Port.", "OK")
 
+def OnForceRecordClick(control, event):
+    import time
+    g_livelink.force_recording = not getattr(g_livelink, 'force_recording', False)
+    
+    if g_livelink.force_recording:
+        control.Caption = "⏹ Stop Recording LiveLink"
+        
+        try:
+            take_name = "LiveLink_Take_" + time.strftime("%Y%m%d_%H%M%S")
+            new_take = FBTake(take_name)
+            if new_take not in FBSystem().Scene.Takes:
+                FBSystem().Scene.Takes.append(new_take)
+            FBSystem().CurrentTake = new_take
+            
+            # Read duration from UI, fallback to 10 mins (600s)
+            duration_sec = 600.0
+            try:
+                if "edit_record_len" in g_ui:
+                    val = float(g_ui["edit_record_len"].Value)
+                    if val > 0: duration_sec = val
+            except: pass
+            
+            # Set a very long duration so it doesn't stop prematurely
+            long_end_time = FBTime()
+            try: long_end_time.SetSecondDouble(duration_sec)
+            except: pass
+            
+            start_time = FBTime(0)
+            new_take.LocalTimeSpan = FBTimeSpan(start_time, long_end_time)
+            
+            player = FBPlayerControl()
+            player.LoopStop = long_end_time
+            
+        except Exception as e:
+            print("Error creating take:", e)
+            
+        try: FBPlayerControl().GotoStart()
+        except: pass
+        FBPlayerControl().Play()
+        
+    else:
+        control.Caption = "🔴 Record LiveLink"
+        FBPlayerControl().Stop()
+        
+        try:
+            stop_time = FBSystem().LocalTime
+            take = FBSystem().CurrentTake
+            if take:
+                start_time = take.LocalTimeSpan.GetStart()
+                take.LocalTimeSpan = FBTimeSpan(start_time, stop_time)
+                FBPlayerControl().LoopStop = stop_time
+        except Exception as e:
+            print("Error setting out point:", e)
+
 def PopulateTool(tool):
     tool.StartSizeX = 350
-    tool.StartSizeY = 400
+    tool.StartSizeY = 500
     
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft, "")
     y = FBAddRegionParam(0, FBAttachType.kFBAttachTop, "")
@@ -350,10 +406,24 @@ def PopulateTool(tool):
         
     g_ui["hdr_connect"] = create_header("CONNECT")
     g_ui["hdr_data"] = create_header("LIVELINK DATA")
+    g_ui["hdr_recording"] = create_header("RECORDING")
     g_ui["hdr_reset"] = create_header("RESET")
     
     g_ui["lbl_status"] = FBLabel()
     g_ui["lbl_status"].Caption = "Status: Disconnected"
+    
+    g_ui["lyt_record_len"] = FBHBoxLayout()
+    g_ui["lbl_record_len"] = FBLabel()
+    g_ui["lbl_record_len"].Caption = "Rec length (sec):"
+    g_ui["edit_record_len"] = FBEditNumber()
+    g_ui["edit_record_len"].Value = 600
+    g_ui["edit_record_len"].Precision = 0
+    g_ui["lyt_record_len"].Add(g_ui["lbl_record_len"], 120)
+    g_ui["lyt_record_len"].Add(g_ui["edit_record_len"], 80)
+    
+    g_ui["btn_force_record"] = FBButton()
+    g_ui["btn_force_record"].Caption = "🔴 Record LiveLink"
+    g_ui["btn_force_record"].OnClick.Add(OnForceRecordClick)
     
     g_ui["main_layout"].Add(g_ui["hdr_connect"], 25)
     g_ui["main_layout"].Add(g_ui["lyt_ip"], 30)
@@ -363,6 +433,10 @@ def PopulateTool(tool):
     g_ui["main_layout"].Add(g_ui["hdr_data"], 25)
     g_ui["main_layout"].Add(g_ui["btn_create_data"], 35)
     g_ui["main_layout"].Add(g_ui["btn_connect_model"], 35)
+    
+    g_ui["main_layout"].Add(g_ui["hdr_recording"], 25)
+    g_ui["main_layout"].Add(g_ui["lyt_record_len"], 30)
+    g_ui["main_layout"].Add(g_ui["btn_force_record"], 35)
     
     g_ui["main_layout"].Add(g_ui["hdr_reset"], 25)
     g_ui["main_layout"].Add(g_ui["btn_delete"], 35)

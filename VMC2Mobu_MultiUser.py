@@ -17,6 +17,9 @@ class VMCState:
         self.models = {}
         self.ip = "0.0.0.0"
         self.port = 39539 + (actor_id - 1)
+        self.prop_cache = {}
+        self.last_applied_cache = {}
+        self.force_recording = False
 
 # Store in sys to persist across script re-runs and prevent port leaks
 if hasattr(sys, "vmc_multi_states") and sys.vmc_multi_states is not None:
@@ -92,7 +95,7 @@ def vmc_to_mb(px, py, pz, qx, qy, qz, qw):
     
     return FBVector3d(mb_px, mb_py, mb_pz), FBVector3d(euler_x, euler_y, euler_z)
 
-def process_osc_message(state, address, args):
+def process_osc_message(state, address, args, is_recording=False):
     if not address or len(args) < 2:
         return
         
@@ -109,6 +112,12 @@ def process_osc_message(state, address, args):
             try:
                 m.SetVector(mb_p, FBModelTransformationType.kModelTranslation, False)
                 m.SetVector(mb_r, FBModelTransformationType.kModelRotation, False)
+                if is_recording:
+                    try:
+                        m.Translation.Key()
+                        m.Rotation.Key()
+                    except:
+                        pass
             except:
                 pass
             
@@ -124,6 +133,12 @@ def process_osc_message(state, address, args):
             try:
                 m.SetVector(mb_p, FBModelTransformationType.kModelTranslation, False)
                 m.SetVector(mb_r, FBModelTransformationType.kModelRotation, False)
+                if is_recording:
+                    try:
+                        m.Translation.Key()
+                        m.Rotation.Key()
+                    except:
+                        pass
             except:
                 pass
             
@@ -134,6 +149,15 @@ def process_osc_message(state, address, args):
         state.blend_data_cache[b_name] = val * 100.0
 
 def OnUIIdle(control, event):
+    # Check if MotionBuilder is currently recording and playing
+    is_recording = False
+    try:
+        player = FBPlayerControl()
+        global_force_recording = any(getattr(state, 'force_recording', False) for state in g_vmc_states.values())
+        is_recording = player.IsPlaying and (player.IsRecording or global_force_recording)
+    except:
+        pass
+
     for state in g_vmc_states.values():
         if not state.is_connected or not state.sock:
             continue
@@ -151,10 +175,10 @@ def OnUIIdle(control, event):
                         offset += 4
                         msg_data = data[offset:offset+size]
                         msg_address, msg_args = parse_osc(msg_data)
-                        process_osc_message(state, msg_address, msg_args)
+                        process_osc_message(state, msg_address, msg_args, is_recording)
                         offset += size
                 else:
-                    process_osc_message(state, address, args)
+                    process_osc_message(state, address, args, is_recording)
                     
                 packets_processed += 1
                 
@@ -171,9 +195,25 @@ def OnUIIdle(control, event):
             facial_node = state.models["Facial"]
             try:
                 for b_name, val in state.blend_data_cache.items():
-                    prop = facial_node.PropertyList.Find(b_name)
+                    prop = state.prop_cache.get(b_name)
+                    if not prop:
+                        prop = facial_node.PropertyList.Find(b_name)
+                        if prop:
+                            state.prop_cache[b_name] = prop
                     if prop:
-                        prop.Data = float(val)
+                        # Only update if value changed significantly
+                        last_val = state.last_applied_cache.get(b_name)
+                        value_changed = last_val is None or abs(last_val - val) > 0.001
+                        if value_changed:
+                            prop.Data = float(val)
+                            state.last_applied_cache[b_name] = val
+                            
+                            # If recording, key the property
+                            if is_recording:
+                                try:
+                                    prop.Key()
+                                except:
+                                    pass
             except:
                 pass
                 
@@ -274,6 +314,8 @@ def OnGenerateClick(control, event):
             m = FBModelSkeleton(prefix + "VMC_" + b_name)
             m.Show = True
             m.Size = 10.0
+            m.Translation.SetAnimated(True)
+            m.Rotation.SetAnimated(True)
             state.models[b_name] = m
             
     for b_name, m in state.models.items():
@@ -290,6 +332,8 @@ def OnGenerateClick(control, event):
         m = FBModelNull(prefix + "VMC_Root")
         m.Show = True
         m.Size = 50.0
+        m.Translation.SetAnimated(True)
+        m.Rotation.SetAnimated(True)
         state.models["Root"] = m
         if "Hips" in state.models:
             state.models["Hips"].Parent = m
@@ -513,12 +557,67 @@ def OnDeleteSkeletonClick(control, event):
     state.is_connected = False
     g_ui["btn_connect"].Caption = "Connect"
     g_ui["lbl_status"].Caption = "Actor {} Disconnected / Reset".format(act_id)
-    
     FBMessageBox("Success", "Cleaned up Actor {} Skeletons, Characters, and Network.".format(act_id), "OK")
+
+def OnForceRecordClick(control, event):
+    import time
+    act_id = current_actor()
+    state = g_vmc_states[act_id]
+    state.force_recording = not getattr(state, 'force_recording', False)
+    
+    if state.force_recording:
+        control.Caption = "⏹ Stop Recording VMC"
+        
+        try:
+            take_name = "VMC_Take_" + time.strftime("%Y%m%d_%H%M%S")
+            new_take = FBTake(take_name)
+            if new_take not in FBSystem().Scene.Takes:
+                FBSystem().Scene.Takes.append(new_take)
+            FBSystem().CurrentTake = new_take
+            
+            # Read duration from UI, fallback to 10 mins (600s)
+            duration_sec = 600.0
+            try:
+                if "edit_record_len" in g_ui:
+                    val = float(g_ui["edit_record_len"].Value)
+                    if val > 0: duration_sec = val
+            except: pass
+            
+            # Set a very long duration so it doesn't stop prematurely
+            long_end_time = FBTime()
+            try: long_end_time.SetSecondDouble(duration_sec)
+            except: pass
+            
+            start_time = FBTime(0)
+            new_take.LocalTimeSpan = FBTimeSpan(start_time, long_end_time)
+            
+            player = FBPlayerControl()
+            player.LoopStop = long_end_time
+            
+        except Exception as e:
+            print("Error creating take:", e)
+            
+        try: FBPlayerControl().GotoStart()
+        except: pass
+        FBPlayerControl().Play()
+        
+    else:
+        control.Caption = "🔴 Record VMC"
+        FBPlayerControl().Stop()
+        
+        try:
+            stop_time = FBSystem().LocalTime
+            take = FBSystem().CurrentTake
+            if take:
+                start_time = take.LocalTimeSpan.GetStart()
+                take.LocalTimeSpan = FBTimeSpan(start_time, stop_time)
+                FBPlayerControl().LoopStop = stop_time
+        except Exception as e:
+            print("Error setting out point:", e)
 
 def PopulateTool(tool):
     tool.StartSizeX = 350
-    tool.StartSizeY = 550
+    tool.StartSizeY = 600
     
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft, "")
     y = FBAddRegionParam(0, FBAttachType.kFBAttachTop, "")
@@ -596,10 +695,24 @@ def PopulateTool(tool):
     g_ui["hdr_connect"] = create_header("CONNECT")
     g_ui["hdr_skeleton"] = create_header("SKELETON")
     g_ui["hdr_facial"] = create_header("FACIAL")
+    g_ui["hdr_recording"] = create_header("RECORDING")
     g_ui["hdr_reset"] = create_header("RESET")
     
     g_ui["lbl_status"] = FBLabel()
     g_ui["lbl_status"].Caption = "Status: Disconnected"
+    
+    g_ui["lyt_record_len"] = FBHBoxLayout()
+    g_ui["lbl_record_len"] = FBLabel()
+    g_ui["lbl_record_len"].Caption = "Rec length (sec):"
+    g_ui["edit_record_len"] = FBEditNumber()
+    g_ui["edit_record_len"].Value = 600
+    g_ui["edit_record_len"].Precision = 0
+    g_ui["lyt_record_len"].Add(g_ui["lbl_record_len"], 120)
+    g_ui["lyt_record_len"].Add(g_ui["edit_record_len"], 80)
+    
+    g_ui["btn_force_record"] = FBButton()
+    g_ui["btn_force_record"].Caption = "🔴 Record VMC"
+    g_ui["btn_force_record"].OnClick.Add(OnForceRecordClick)
     
     g_ui["main_layout"].Add(g_ui["lyt_actor"], 30)
     g_ui["main_layout"].Add(g_ui["hdr_connect"], 25)
@@ -614,6 +727,10 @@ def PopulateTool(tool):
     g_ui["main_layout"].Add(g_ui["hdr_facial"], 25)
     g_ui["main_layout"].Add(g_ui["btn_expr"], 35)
     g_ui["main_layout"].Add(g_ui["btn_connect_model"], 35)
+    
+    g_ui["main_layout"].Add(g_ui["hdr_recording"], 25)
+    g_ui["main_layout"].Add(g_ui["lyt_record_len"], 30)
+    g_ui["main_layout"].Add(g_ui["btn_force_record"], 35)
     
     g_ui["main_layout"].Add(g_ui["hdr_reset"], 25)
     g_ui["main_layout"].Add(g_ui["btn_delete"], 35)

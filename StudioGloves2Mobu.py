@@ -13,6 +13,7 @@ class VMCState:
         self.is_connected = False
         self.bone_data_cache = {}
         self.models = {}
+        self.force_recording = False
 
 # Store in sys to persist across script re-runs and prevent port leaks
 if hasattr(sys, "vmc_state") and sys.vmc_state is not None:
@@ -83,7 +84,7 @@ def vmc_to_mb(px, py, pz, qx, qy, qz, qw):
     
     return FBVector3d(mb_px, mb_py, mb_pz), FBVector3d(euler_x, euler_y, euler_z)
 
-def process_osc_message(address, args):
+def process_osc_message(address, args, is_recording=False):
     if not address or len(args) < 2:
         return
         
@@ -100,6 +101,12 @@ def process_osc_message(address, args):
             try:
                 m.SetVector(mb_p, FBModelTransformationType.kModelTranslation, False)
                 m.SetVector(mb_r, FBModelTransformationType.kModelRotation, False)
+                if is_recording:
+                    try:
+                        m.Translation.Key()
+                        m.Rotation.Key()
+                    except:
+                        pass
             except:
                 pass
             
@@ -115,6 +122,12 @@ def process_osc_message(address, args):
             try:
                 m.SetVector(mb_p, FBModelTransformationType.kModelTranslation, False)
                 m.SetVector(mb_r, FBModelTransformationType.kModelRotation, False)
+                if is_recording:
+                    try:
+                        m.Translation.Key()
+                        m.Rotation.Key()
+                    except:
+                        pass
             except:
                 pass
             
@@ -122,6 +135,14 @@ def process_osc_message(address, args):
 def OnUIIdle(control, event):
     if not g_vmc.is_connected or not g_vmc.sock:
         return
+        
+    # Check if MotionBuilder is currently recording and playing
+    is_recording = False
+    try:
+        player = FBPlayerControl()
+        is_recording = player.IsPlaying and (player.IsRecording or getattr(g_vmc, 'force_recording', False))
+    except:
+        pass
         
     packets_processed = 0
     last_packet_size = 0
@@ -138,10 +159,10 @@ def OnUIIdle(control, event):
                     offset += 4
                     msg_data = data[offset:offset+size]
                     msg_address, msg_args = parse_osc(msg_data)
-                    process_osc_message(msg_address, msg_args)
+                    process_osc_message(msg_address, msg_args, is_recording)
                     offset += size
             else:
-                process_osc_message(address, args)
+                process_osc_message(address, args, is_recording)
                 
             packets_processed += 1
             
@@ -236,6 +257,8 @@ def OnGenerateClick(control, event):
             m = FBModelSkeleton("VMC_" + b_name)
             m.Show = True
             m.Size = 10.0
+            m.Translation.SetAnimated(True)
+            m.Rotation.SetAnimated(True)
             g_vmc.models[b_name] = m
             
     for b_name, m in g_vmc.models.items():
@@ -253,6 +276,8 @@ def OnGenerateClick(control, event):
         m_l = FBModelNull("VMC_LeftHandRoot")
         m_l.Show = True
         m_l.Size = 50.0
+        m_l.Translation.SetAnimated(True)
+        m_l.Rotation.SetAnimated(True)
         g_vmc.models["VMC_LeftHandRoot"] = m_l
         m_l.SetVector(FBVector3d(0, 180, 0), FBModelTransformationType.kModelRotation, False)
             
@@ -260,6 +285,8 @@ def OnGenerateClick(control, event):
         m_r = FBModelNull("VMC_RightHandRoot")
         m_r.Show = True
         m_r.Size = 50.0
+        m_r.Translation.SetAnimated(True)
+        m_r.Rotation.SetAnimated(True)
         g_vmc.models["VMC_RightHandRoot"] = m_r
         m_r.SetVector(FBVector3d(0, 180, 0), FBModelTransformationType.kModelRotation, False)
 
@@ -562,9 +589,63 @@ def OnDeleteSkeletonClick(control, event):
     except: pass
     FBMessageBox("Success", "Cleaned up all VMC Skeletons and Characters.", "OK")
 
+def OnForceRecordClick(control, event):
+    import time
+    g_vmc.force_recording = not getattr(g_vmc, 'force_recording', False)
+    
+    if g_vmc.force_recording:
+        control.Caption = "⏹ Stop Recording StudioGloves"
+        
+        try:
+            take_name = "StudioGloves_Take_" + time.strftime("%Y%m%d_%H%M%S")
+            new_take = FBTake(take_name)
+            if new_take not in FBSystem().Scene.Takes:
+                FBSystem().Scene.Takes.append(new_take)
+            FBSystem().CurrentTake = new_take
+            
+            # Read duration from UI, fallback to 10 mins (600s)
+            duration_sec = 600.0
+            try:
+                if "edit_record_len" in g_ui:
+                    val = float(g_ui["edit_record_len"].Value)
+                    if val > 0: duration_sec = val
+            except: pass
+            
+            # Set a very long duration so it doesn't stop prematurely
+            long_end_time = FBTime()
+            try: long_end_time.SetSecondDouble(duration_sec)
+            except: pass
+            
+            start_time = FBTime(0)
+            new_take.LocalTimeSpan = FBTimeSpan(start_time, long_end_time)
+            
+            player = FBPlayerControl()
+            player.LoopStop = long_end_time
+            
+        except Exception as e:
+            print("Error creating take:", e)
+            
+        try: FBPlayerControl().GotoStart()
+        except: pass
+        FBPlayerControl().Play()
+        
+    else:
+        control.Caption = "🔴 Record StudioGloves"
+        FBPlayerControl().Stop()
+        
+        try:
+            stop_time = FBSystem().LocalTime
+            take = FBSystem().CurrentTake
+            if take:
+                start_time = take.LocalTimeSpan.GetStart()
+                take.LocalTimeSpan = FBTimeSpan(start_time, stop_time)
+                FBPlayerControl().LoopStop = stop_time
+        except Exception as e:
+            print("Error setting out point:", e)
+
 def PopulateTool(tool):
     tool.StartSizeX = 350
-    tool.StartSizeY = 550
+    tool.StartSizeY = 600
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft, "")
     y = FBAddRegionParam(0, FBAttachType.kFBAttachTop, "")
     w = FBAddRegionParam(0, FBAttachType.kFBAttachRight, "")
@@ -583,10 +664,41 @@ def PopulateTool(tool):
     g_ui["btn_delete"] = FBButton(); g_ui["btn_delete"].Caption = "Delete Skeleton"; g_ui["btn_delete"].OnClick.Add(OnDeleteSkeletonClick)
     def create_header(text):
         lbl = FBLabel(); lbl.Caption = "--- " + text + " ---"; lbl.Justify = FBTextJustify.kFBTextJustifyCenter; return lbl
-    g_ui["lbl_status"] = FBLabel(); g_ui["lbl_status"].Caption = "Status: Disconnected"
-    g_ui["main_layout"].Add(create_header("CONNECT"), 25); g_ui["main_layout"].Add(g_ui["lyt_ip"], 30); g_ui["main_layout"].Add(g_ui["lyt_port"], 30); g_ui["main_layout"].Add(g_ui["btn_connect"], 35)
-    g_ui["main_layout"].Add(create_header("SKELETON"), 25); g_ui["main_layout"].Add(g_ui["btn_gen_skeleton"], 35); g_ui["main_layout"].Add(g_ui["btn_zero"], 35); g_ui["main_layout"].Add(g_ui["btn_connect_skel"], 35); g_ui["main_layout"].Add(g_ui["btn_add_definition"], 35); g_ui["main_layout"].Add(g_ui["btn_add_fingers"], 35)
-    g_ui["main_layout"].Add(create_header("RESET"), 25); g_ui["main_layout"].Add(g_ui["btn_delete"], 35); g_ui["main_layout"].Add(g_ui["lbl_status"], 35)
+    g_ui["lbl_status"] = FBLabel()
+    g_ui["lbl_status"].Caption = "Status: Disconnected"
+    
+    g_ui["lyt_record_len"] = FBHBoxLayout()
+    g_ui["lbl_record_len"] = FBLabel()
+    g_ui["lbl_record_len"].Caption = "Rec length (sec):"
+    g_ui["edit_record_len"] = FBEditNumber()
+    g_ui["edit_record_len"].Value = 600
+    g_ui["edit_record_len"].Precision = 0
+    g_ui["lyt_record_len"].Add(g_ui["lbl_record_len"], 120)
+    g_ui["lyt_record_len"].Add(g_ui["edit_record_len"], 80)
+    
+    g_ui["btn_force_record"] = FBButton()
+    g_ui["btn_force_record"].Caption = "🔴 Record StudioGloves"
+    g_ui["btn_force_record"].OnClick.Add(OnForceRecordClick)
+
+    g_ui["main_layout"].Add(create_header("CONNECT"), 25)
+    g_ui["main_layout"].Add(g_ui["lyt_ip"], 30)
+    g_ui["main_layout"].Add(g_ui["lyt_port"], 30)
+    g_ui["main_layout"].Add(g_ui["btn_connect"], 35)
+    
+    g_ui["main_layout"].Add(create_header("SKELETON"), 25)
+    g_ui["main_layout"].Add(g_ui["btn_gen_skeleton"], 35)
+    g_ui["main_layout"].Add(g_ui["btn_zero"], 35)
+    g_ui["main_layout"].Add(g_ui["btn_connect_skel"], 35)
+    g_ui["main_layout"].Add(g_ui["btn_add_definition"], 35)
+    g_ui["main_layout"].Add(g_ui["btn_add_fingers"], 35)
+    
+    g_ui["main_layout"].Add(create_header("RECORDING"), 25)
+    g_ui["main_layout"].Add(g_ui["lyt_record_len"], 30)
+    g_ui["main_layout"].Add(g_ui["btn_force_record"], 35)
+    
+    g_ui["main_layout"].Add(create_header("RESET"), 25)
+    g_ui["main_layout"].Add(g_ui["btn_delete"], 35)
+    g_ui["main_layout"].Add(g_ui["lbl_status"], 35)
 
 def CreateTool():
     tool_name = "Saint's StudioGloves VMC"
