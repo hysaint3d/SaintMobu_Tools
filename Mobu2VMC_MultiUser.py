@@ -8,11 +8,12 @@ from pyfbsdk_additions import *
 
 # ── Global State ──────────────────────────────────────────────────────────────
 class Mobu2VMCState:
-    def __init__(self):
+    def __init__(self, actor_id):
+        self.actor_id       = actor_id
         self.sock           = None
-        self.is_sending     = False
+        self.is_connected   = False  # renamed from is_sending for consistency
         self.target_ip      = "127.0.0.1"
-        self.target_port    = 39539
+        self.target_port    = 39539 + (actor_id - 1)
         self.bone_cache     = {}
         self.root_cache     = None
         self.frame_count    = 0
@@ -22,16 +23,21 @@ class Mobu2VMCState:
         self.hip_scale_z    = 1.0   # Scale factor for Hips local Z (forward)
         self.vmc2mobu_mode  = False  # True = VMC2Mobu skeleton (Root Y~180)
 
-if hasattr(sys, "mobu2vmc_state") and sys.mobu2vmc_state is not None:
-    try: FBSystem().OnUIIdle.Remove(sys.mobu2vmc_idle_func)
+if hasattr(sys, "mobu2vmc_multi_states") and sys.mobu2vmc_multi_states is not None:
+    try: FBSystem().OnUIIdle.Remove(sys.mobu2vmc_multi_idle_func)
     except: pass
-    if sys.mobu2vmc_state.sock:
-        try: sys.mobu2vmc_state.sock.close()
-        except: pass
+    for state in sys.mobu2vmc_multi_states.values():
+        if state.sock:
+            try: state.sock.close()
+            except: pass
 
-sys.mobu2vmc_state = Mobu2VMCState()
-g_sender = sys.mobu2vmc_state
+sys.mobu2vmc_multi_states = {1: Mobu2VMCState(1), 2: Mobu2VMCState(2), 3: Mobu2VMCState(3)}
+g_sender_states = sys.mobu2vmc_multi_states
 g_ui = {}
+
+def current_actor():
+    try: return g_ui["list_actor"].ItemIndex + 1
+    except: return 1
 
 # ── Data Tables ───────────────────────────────────────────────────────────────
 VMC_BONE_NAMES = set([
@@ -161,7 +167,7 @@ def euler_to_quat(ex_deg, ey_deg, ez_deg):
     qz = cx*cy*sz - sx*sy*cz
     return qx, qy, qz, qw
 
-def mb_to_vmc(model):
+def mb_to_vmc(model, state):
     pos = FBVector3d()
     rot = FBVector3d()
     model.GetVector(pos, FBModelTransformationType.kModelTranslation, False)
@@ -170,7 +176,7 @@ def mb_to_vmc(model):
     vmc_py =  pos[1] / 100.0
     vmc_pz =  pos[2] / 100.0  # Fixed Z-axis inversion
     qx, qy, qz, qw = euler_to_quat(rot[0], rot[1], rot[2])
-    if g_sender.vmc2mobu_mode:
+    if state.vmc2mobu_mode:
         # VMC2Mobu skeleton (Root Y~180): exact inverse of vmc_to_mb
         return vmc_px, vmc_py, vmc_pz, -qx, -qy, qz, qw
     else:
@@ -178,41 +184,48 @@ def mb_to_vmc(model):
         return vmc_px, vmc_py, vmc_pz, -qx, qy, qz, -qw
 
 # ── Scene Scan ────────────────────────────────────────────────────────────────
-def scan_vmc_bones():
-    """Scan VMC_ bones. Detect skeleton type via VMC_Source property on VMC_Root.
-    If property is 'Mobu2VMC' -> new skeleton (mode=False).
-    If property absent    -> VMC2Mobu imported skeleton (mode=True)."""
+def scan_vmc_bones(act_id):
+    """Scan VMC bones for a specific actor using Namespace."""
+    state = g_sender_states[act_id]
     root_model = None
     bones = {}
+    prefix = "VMC{}:VMC_".format(act_id)
     try:
         for comp in FBSystem().Scene.Components:
             try:
                 if not isinstance(comp, FBModel): continue
-                name = comp.Name
-                if name == "VMC_Root":
+                name = comp.LongName if hasattr(comp, "LongName") and comp.LongName else comp.Name
+                
+                if name == "VMC{}:VMC_Root".format(act_id):
                     root_model = comp
-                elif name.startswith("VMC_"):
-                    bn = name[4:]
+                elif name.startswith(prefix):
+                    bn = name[len(prefix):]
                     if bn in VMC_BONE_NAMES:
                         bones[bn] = comp
             except: continue
     except: pass
+    
     if root_model:
         src_prop = root_model.PropertyList.Find("VMC_Source")
         is_new = (src_prop is not None and src_prop.Data == "Mobu2VMC")
-        g_sender.vmc2mobu_mode = not is_new
+        state.vmc2mobu_mode = not is_new
     else:
-        g_sender.vmc2mobu_mode = False
+        state.vmc2mobu_mode = False
     return root_model, bones
 
 # ── Generate Standard Skeleton ────────────────────────────────────────────────
 def OnGenerateSkeletonClick(control, event):
+    act_id = current_actor()
+    state = g_sender_states[act_id]
+    prefix = "VMC{}:".format(act_id)
+    
     # Check if VMC_Root already exists
     for comp in FBSystem().Scene.Components:
         try:
-            if isinstance(comp, FBModel) and comp.Name == "VMC_Root":
+            name = comp.LongName if hasattr(comp, "LongName") and comp.LongName else comp.Name
+            if isinstance(comp, FBModel) and name == "{}VMC_Root".format(prefix):
                 FBMessageBox("Warning",
-                    "VMC_Root already exists in scene!\n"
+                    "{}VMC_Root already exists in scene!\n".format(prefix) +
                     "Please delete it first before generating.", "OK")
                 return
         except: continue
@@ -220,7 +233,7 @@ def OnGenerateSkeletonClick(control, event):
     models = {}
 
     # Create Root null (Y=0 — stable T-pose for HIK characterization)
-    root = FBModelNull("VMC_Root")
+    root = FBModelNull("{}VMC_Root".format(prefix))
     root.Show = True; root.Size = 50.0
     # Stamp a property so Mobu2VMC can identify this as a self-generated skeleton
     try:
@@ -230,16 +243,14 @@ def OnGenerateSkeletonClick(control, event):
     models["Root"] = root
 
     # Create bones and set positions BEFORE parenting.
-    # With no parent yet, local = world, so STANDARD_POSITIONS are world coords.
-    # Left arm is at +X, right at -X — correct T-pose facing +Z.
     for b_name, pos in STANDARD_POSITIONS.items():
-        m = FBModelSkeleton("VMC_" + b_name)
+        m = FBModelSkeleton("{}VMC_".format(prefix) + b_name)
         m.Show = True; m.Size = 50.0
         m.SetVector(FBVector3d(pos[0], pos[1], pos[2]),
                     FBModelTransformationType.kModelTranslation, False)
         models[b_name] = m
 
-    # Establish hierarchy — MB auto-computes local positions relative to each parent
+    # Establish hierarchy
     for b_name, parent_name in UNITY_HIERARCHY.items():
         if b_name not in models: continue
         if parent_name is None:
@@ -247,29 +258,31 @@ def OnGenerateSkeletonClick(control, event):
         elif parent_name in models:
             models[b_name].Parent = models[parent_name]
 
-    # Zero all rotations (T-Pose, Root stays Y=0)
+    # Zero all rotations
     for b_name, m in models.items():
         m.SetVector(FBVector3d(0, 0, 0),
                     FBModelTransformationType.kModelRotation, False)
 
     FBSystem().Scene.Evaluate()
     FBMessageBox("Success",
-        "Standard VMC skeleton generated!\n"
-        "Bones: {} + VMC_Root\n"
-        "Left arm at +X, facing +Z".format(len(STANDARD_POSITIONS)), "OK")
+        "Standard VMC skeleton generated for Actor {}!\n".format(act_id) +
+        "Bones: {} + VMC_Root\n".format(len(STANDARD_POSITIONS)) +
+        "Left arm at +X, facing +Z", "OK")
 
 # ── Characterize HIK ──────────────────────────────────────────────────────────
 def OnCharacterizeClick(control, event):
-    root_model, bones = scan_vmc_bones()
+    act_id = current_actor()
+    state = g_sender_states[act_id]
+    root_model, bones = scan_vmc_bones(act_id)
     if not bones:
         FBMessageBox("Warning",
-            "No VMC_ skeleton found!\nPlease generate or load a VMC skeleton first.", "OK")
+            "No VMC_ skeleton found for Actor {}!\nPlease generate or load a VMC skeleton first.".format(act_id), "OK")
         return
 
-    char_name = "VMC_HIK_Character"
+    char_name = "VMC{}:VMC_HIK_Character".format(act_id)
     char = None
     for c in FBSystem().Scene.Characters:
-        if c.Name == char_name:
+        if c.Name == char_name or (hasattr(c, "LongName") and c.LongName == char_name):
             char = c; break
 
     if not char:
@@ -315,38 +328,28 @@ def OnCharacterizeClick(control, event):
     if root_model:
         ref_prop = char.PropertyList.Find("ReferenceLink")
         if ref_prop is None:
-            # Fallback: scan all properties for any containing "Reference"
             for p in char.PropertyList:
                 if "Reference" in p.Name:
                     ref_prop = p
-                    print("Mobu2VMC: Found Reference property:", p.Name)
                     break
         if ref_prop is not None:
             ref_prop.removeAll()
-            try:
-                ref_prop.append(root_model)
-                print("Mobu2VMC: ReferenceLink -> VMC_Root [OK]")
+            try: ref_prop.append(root_model)
             except:
-                try:
-                    ref_prop.insert(root_model)
-                    print("Mobu2VMC: ReferenceLink -> VMC_Root [OK via insert]")
-                except Exception as e:
-                    print("Mobu2VMC: ReferenceLink failed:", e)
-        else:
-            print("Mobu2VMC: ReferenceLink property NOT found")
+                try: ref_prop.insert(root_model)
+                except: pass
 
     FBSystem().Scene.Evaluate()
 
     success = char.SetCharacterizeOn(True)
 
-    # Restore Root to Y=180 after characterize ONLY for imported skeletons (VMC2Mobu)
-    if root_model and g_sender.vmc2mobu_mode:
+    if root_model and state.vmc2mobu_mode:
         root_model.SetVector(FBVector3d(0, 180, 0),
                              FBModelTransformationType.kModelRotation, False)
     FBSystem().Scene.Evaluate()
 
     if success:
-        FBMessageBox("Success", "HIK Characterized Successfully!\nRoot restored to Y=180.", "OK")
+        FBMessageBox("Success", "Actor {} HIK Characterized Successfully!".format(act_id), "OK")
     else:
         err = char.GetCharacterizeError()
         print("CHARACTERIZE ERROR:", err)
@@ -356,7 +359,9 @@ def OnCharacterizeClick(control, event):
 
 # ── FPS Selection ─────────────────────────────────────────────────────────────
 def set_fps(fps):
-    g_sender.fps_limit = fps
+    act_id = current_actor()
+    state = g_sender_states[act_id]
+    state.fps_limit = fps
     g_ui["btn_fps24"].Caption = "[24]" if fps == 24 else " 24 "
     g_ui["btn_fps30"].Caption = "[30]" if fps == 30 else " 30 "
     g_ui["btn_fps60"].Caption = "[60]" if fps == 60 else " 60 "
@@ -367,163 +372,178 @@ def OnFPS60Click(c, e): set_fps(60)
 
 # ── Send Loop ─────────────────────────────────────────────────────────────────
 def OnSendUIIdle(control, event):
-    if not g_sender.is_sending or not g_sender.sock:
-        return
-
-    # FPS throttle
     now = time.time()
-    if now - g_sender.last_send_time < (1.0 / g_sender.fps_limit):
-        return
-    g_sender.last_send_time = now
+    for act_id, state in g_sender_states.items():
+        if not state.is_connected or not state.sock:
+            continue
 
-    target = (g_sender.target_ip, g_sender.target_port)
-    sent   = 0
+        if now - state.last_send_time < (1.0 / state.fps_limit):
+            continue
+        state.last_send_time = now
 
-    # ── Root: Send Global X and Z translation to Root ──────────
-    root_px, root_pz = 0.0, 0.0
-    if "Hips" in g_sender.bone_cache:
-        hip_global = FBVector3d()
-        g_sender.bone_cache["Hips"].GetVector(hip_global, FBModelTransformationType.kModelTranslation, True)
-        root_px = -hip_global[0] / 100.0
-        root_pz =  hip_global[2] / 100.0  # Fixed Z-axis inversion (Mobu +Z is Forward, Unity +Z is Forward)
+        target = (state.target_ip, state.target_port)
+        sent   = 0
 
-    # Apply Global Scale to Root World Translation
-    root_px *= g_sender.hip_scale_x
-    root_pz *= g_sender.hip_scale_z
+        root_px, root_pz = 0.0, 0.0
+        if "Hips" in state.bone_cache:
+            hip_global = FBVector3d()
+            state.bone_cache["Hips"].GetVector(hip_global, FBModelTransformationType.kModelTranslation, True)
+            root_px = -hip_global[0] / 100.0
+            root_pz =  hip_global[2] / 100.0
+            
+        root_px *= state.hip_scale_x
+        root_pz *= state.hip_scale_z
 
-    g_sender.sock.sendto(
-        encode_bone_msg("/VMC/Ext/Root/Pos","root",root_px,0.0,root_pz,0,0,0,1), target)
-    sent += 1
+        state.sock.sendto(
+            encode_bone_msg("/VMC/Ext/Root/Pos","root",root_px,0.0,root_pz,0,0,0,1), target)
+        sent += 1
 
-    # ── Bones: local position + rotation (standard VMC format) ────────────────
-    for bone_name, model in g_sender.bone_cache.items():
-        try:
-            px,py,pz,qx,qy,qz,qw = mb_to_vmc(model)
-            if bone_name == "Hips":
-                # Standard VMC: Root handles world X/Z. Hips handles local Y (height) and rotation.
-                px = 0.0
-                pz = 0.0
-                # py remains unchanged to allow crouching/jumping
-            else:
-                # VMC Spec recommendation: Send 0 for non-root/hips bone positions to preserve receiver's model proportions
-                px, py, pz = 0.0, 0.0, 0.0
-                
-            g_sender.sock.sendto(
-                encode_bone_msg("/VMC/Ext/Bone/Pos",bone_name,px,py,pz,qx,qy,qz,qw), target)
-            sent += 1
-        except: pass
-
-    g_sender.frame_count += 1
-    if g_sender.frame_count % 60 == 0:
-        try:
-            g_ui["lbl_status"].Caption = "Sending: {} msgs @ {}fps -> {}:{}".format(
-                sent, g_sender.fps_limit,
-                g_sender.target_ip, g_sender.target_port)
-        except:
-            try: FBSystem().OnUIIdle.Remove(OnSendUIIdle)
+        for bone_name, model in state.bone_cache.items():
+            try:
+                px,py,pz,qx,qy,qz,qw = mb_to_vmc(model, state)
+                if bone_name == "Hips":
+                    px = 0.0
+                    pz = 0.0
+                else:
+                    px, py, pz = 0.0, 0.0, 0.0
+                    
+                state.sock.sendto(
+                    encode_bone_msg("/VMC/Ext/Bone/Pos",bone_name,px,py,pz,qx,qy,qz,qw), target)
+                sent += 1
             except: pass
+
+        state.frame_count += 1
+        
+    act_id = current_actor()
+    act_state = g_sender_states[act_id]
+    if act_state.is_connected:
+        g_ui["lbl_status"].Caption = "Actor {} Sending: {} msgs @ {}fps -> {}:{}".format(
+            act_id, len(act_state.bone_cache) + 1, act_state.fps_limit,
+            act_state.target_ip, act_state.target_port)
+    else:
+        g_ui["lbl_status"].Caption = "Actor {} Status: Stopped".format(act_id)
 
 # ── Hip Scale ────────────────────────────────────────────────────────────────
 def OnHipScaleXChange(control, event):
-    g_sender.hip_scale_x = control.Value
+    act_id = current_actor()
+    g_sender_states[act_id].hip_scale_x = control.Value
 
 def OnHipScaleZChange(control, event):
-    g_sender.hip_scale_z = control.Value
+    act_id = current_actor()
+    g_sender_states[act_id].hip_scale_z = control.Value
 
 # ── Button Callbacks ──────────────────────────────────────────────────────────
 def OnScanClick(control, event):
-    root_model, bones = scan_vmc_bones()
+    act_id = current_actor()
+    root_model, bones = scan_vmc_bones(act_id)
     total = (1 if root_model else 0) + len(bones)
     if total == 0:
         FBMessageBox("Scan Result",
-            "No VMC_ bones found in scene.\n\n"
-            "Please click 'Generate Skeleton'\n"
-            "to create a standard VMC skeleton.", "OK")
+            "No VMC_ bones found for Actor {}.\n\n".format(act_id) +
+            "Please click 'Generate Skeleton'.", "OK")
         return
-    lines = ["Found {} VMC_ model(s):".format(total)]
-    if root_model: lines.append("  [Root]  VMC_Root")
-    for b in sorted(bones.keys()): lines.append("  [Bone]  VMC_" + b)
+    lines = ["Found {} VMC_ model(s) for Actor {}:".format(total, act_id)]
+    if root_model: lines.append("  [Root]  VMC{}:VMC_Root".format(act_id))
+    for b in sorted(bones.keys()): lines.append("  [Bone]  VMC{}:VMC_".format(act_id) + b)
     FBMessageBox("Scan Result", "\n".join(lines), "OK")
 
+def OnActorChange(control, event):
+    act_id = current_actor()
+    state = g_sender_states[act_id]
+    g_ui["edit_ip"].Text = state.target_ip
+    g_ui["edit_port"].Value = state.target_port
+    g_ui["slider_hip_x"].Value = state.hip_scale_x
+    g_ui["slider_hip_z"].Value = state.hip_scale_z
+    set_fps(state.fps_limit)
+    if state.is_connected:
+        g_ui["btn_start"].Caption = "Sending..."
+        g_ui["btn_start"].Enabled = False
+        g_ui["btn_stop"].Enabled  = True
+        g_ui["lbl_status"].Caption = "Actor {} Sending to {}:{}".format(
+            act_id, state.target_ip, state.target_port)
+    else:
+        g_ui["btn_start"].Caption = "Start Sending"
+        g_ui["btn_start"].Enabled = True
+        g_ui["btn_stop"].Enabled  = False
+        g_ui["lbl_status"].Caption = "Actor {} Status: Stopped".format(act_id)
+
 def OnStartSendClick(control, event):
-    if g_sender.is_sending: return
-    root_model, bones = scan_vmc_bones()
+    act_id = current_actor()
+    state = g_sender_states[act_id]
+    if state.is_connected: return
+    root_model, bones = scan_vmc_bones(act_id)
     if not root_model and not bones:
         FBMessageBox("Warning",
-            "No VMC_ skeleton found in scene!\n"
+            "No VMC_ skeleton found for Actor {}!\n".format(act_id) +
             "Please use 'Generate Skeleton' first.", "OK")
         return
     try:
-        g_sender.target_ip   = g_ui["edit_ip"].Text
-        g_sender.target_port = int(g_ui["edit_port"].Value)
-        g_sender.root_cache  = root_model
-        g_sender.bone_cache  = bones
-        g_sender.sock        = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        g_sender.is_sending  = True
-        g_sender.frame_count = 0
-        g_sender.last_send_time = 0.0
+        state.target_ip   = g_ui["edit_ip"].Text
+        state.target_port = int(g_ui["edit_port"].Value)
+        state.root_cache  = root_model
+        state.bone_cache  = bones
+        state.sock        = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        state.is_connected = True
+        state.frame_count = 0
+        state.last_send_time = 0.0
 
         g_ui["btn_start"].Caption = "Sending..."
         g_ui["btn_start"].Enabled = False
         g_ui["btn_stop"].Enabled  = True
-        g_ui["lbl_status"].Caption = "Status: Sending to {}:{} ({} bones, {}fps)".format(
-            g_sender.target_ip, g_sender.target_port,
-            len(bones), g_sender.fps_limit)
+        g_ui["lbl_status"].Caption = "Actor {} Sending to {}:{} ({} bones)".format(
+            act_id, state.target_ip, state.target_port, len(bones))
 
         fb_sys = FBSystem()
         fb_sys.OnUIIdle.Remove(OnSendUIIdle)
         fb_sys.OnUIIdle.Add(OnSendUIIdle)
         import sys as python_sys
-        python_sys.mobu2vmc_idle_func = OnSendUIIdle
-
-        print("Mobu2VMC: Sending to {}:{} | bones:{} fps:{}".format(
-            g_sender.target_ip, g_sender.target_port, len(bones), g_sender.fps_limit))
+        python_sys.mobu2vmc_multi_idle_func = OnSendUIIdle
     except Exception as e:
         g_ui["lbl_status"].Caption = "Error: " + str(e)
-        print("Mobu2VMC start error:", e)
 
 def OnStopSendClick(control, event):
-    g_sender.is_sending = False
-    if g_sender.sock:
-        try: g_sender.sock.close()
+    act_id = current_actor()
+    state = g_sender_states[act_id]
+    state.is_connected = False
+    if state.sock:
+        try: state.sock.close()
         except: pass
-        g_sender.sock = None
-    try: FBSystem().OnUIIdle.Remove(OnSendUIIdle)
-    except: pass
+        state.sock = None
+        
     g_ui["btn_start"].Caption = "Start Sending"
     g_ui["btn_start"].Enabled = True
     g_ui["btn_stop"].Enabled  = False
-    g_ui["lbl_status"].Caption = "Status: Stopped"
-    print("Mobu2VMC: Stopped.")
+    g_ui["lbl_status"].Caption = "Actor {} Status: Stopped".format(act_id)
 
 # ── Delete Skeleton ───────────────────────────────────────────────────────────
 def OnDeleteSkeletonClick(control, event):
-    # Stop sending first
-    if g_sender.is_sending:
+    act_id = current_actor()
+    state = g_sender_states[act_id]
+    
+    if state.is_connected:
         OnStopSendClick(None, None)
 
-    # Delete HIK character first (bones are locked while characterized)
-    char_name = "VMC_HIK_Character"
+    prefix = "VMC{}:".format(act_id)
+    char_name = prefix + "VMC_HIK_Character"
     for c in list(FBSystem().Scene.Characters):
-        if c.Name == char_name:
+        if c.Name == char_name or (hasattr(c, "LongName") and c.LongName == char_name):
             try: c.SetCharacterizeOn(False)
             except: pass
             try: c.FBDelete()
             except: pass
 
-    # Delete all VMC_ models from scene
     deleted = 0
     for comp in list(FBSystem().Scene.Components):
         try:
-            if isinstance(comp, FBModel) and comp.Name and comp.Name.startswith("VMC_"):
+            name = comp.LongName if hasattr(comp, "LongName") and comp.LongName else comp.Name
+            if isinstance(comp, FBModel) and name and name.startswith(prefix):
                 comp.FBDelete()
                 deleted += 1
         except: pass
 
-    g_sender.bone_cache.clear()
-    g_sender.root_cache = None
-    print("Mobu2VMC: Deleted {} VMC_ objects.".format(deleted))
-    FBMessageBox("Done", "Deleted VMC skeleton ({} objects).".format(deleted), "OK")
+    state.bone_cache.clear()
+    state.root_cache = None
+    FBMessageBox("Done", "Deleted Actor {} VMC skeleton ({} objects).".format(act_id, deleted), "OK")
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 def PopulateTool(tool):
@@ -538,6 +558,19 @@ def PopulateTool(tool):
 
     g_ui["main_layout"] = FBVBoxLayout()
     tool.SetControl("main", g_ui["main_layout"])
+    
+    # Actor Selector
+    g_ui["lyt_actor"] = FBHBoxLayout()
+    g_ui["lbl_actor"] = FBLabel()
+    g_ui["lbl_actor"].Caption = "Select Actor:"
+    g_ui["list_actor"] = FBList()
+    g_ui["list_actor"].Items.append("Actor 1 (Namespace: VMC1)")
+    g_ui["list_actor"].Items.append("Actor 2 (Namespace: VMC2)")
+    g_ui["list_actor"].Items.append("Actor 3 (Namespace: VMC3)")
+    g_ui["list_actor"].ItemIndex = 0
+    g_ui["list_actor"].OnChange.Add(OnActorChange)
+    g_ui["lyt_actor"].Add(g_ui["lbl_actor"], 80)
+    g_ui["lyt_actor"].Add(g_ui["list_actor"], 180)
 
     def hdr(text):
         lbl = FBLabel()
@@ -583,7 +616,7 @@ def PopulateTool(tool):
     g_ui["slider_hip_x"]  = FBEditNumber()
     g_ui["slider_hip_x"].Min = 0.0
     g_ui["slider_hip_x"].Max = 2.0
-    g_ui["slider_hip_x"].Value = g_sender.hip_scale_x
+    g_ui["slider_hip_x"].Value = g_sender_states[1].hip_scale_x
     g_ui["slider_hip_x"].Precision = 2
     g_ui["slider_hip_x"].OnChange.Add(OnHipScaleXChange)
     g_ui["lyt_hip_x"].Add(g_ui["lbl_hip_x"],     100)
@@ -595,7 +628,7 @@ def PopulateTool(tool):
     g_ui["slider_hip_z"]  = FBEditNumber()
     g_ui["slider_hip_z"].Min = 0.0
     g_ui["slider_hip_z"].Max = 2.0
-    g_ui["slider_hip_z"].Value = g_sender.hip_scale_z
+    g_ui["slider_hip_z"].Value = g_sender_states[1].hip_scale_z
     g_ui["slider_hip_z"].Precision = 2
     g_ui["slider_hip_z"].OnChange.Add(OnHipScaleZChange)
     g_ui["lyt_hip_z"].Add(g_ui["lbl_hip_z"],     100)
@@ -611,8 +644,8 @@ def PopulateTool(tool):
 
     g_ui["lbl_status"] = FBLabel(); g_ui["lbl_status"].Caption = "Status: Stopped"
 
-    # ── Layout
     lay = g_ui["main_layout"]
+    lay.Add(g_ui["lyt_actor"],            30)
     lay.Add(hdr("SKELETON"),              25)
     lay.Add(g_ui["btn_scan"],             35)
     lay.Add(g_ui["btn_gen"],              35)
