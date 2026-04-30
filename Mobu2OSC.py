@@ -25,6 +25,7 @@ class Mobu2OSCState:
         self.selected_models = {}  # Dictionary to hold models {Name: FBModel}
         self.fps_limit = 60
         self.last_send_time = 0.0
+        self.frame_counter = 0
 
 sys.mobu2osc_state = Mobu2OSCState()
 g_sender = sys.mobu2osc_state
@@ -48,60 +49,85 @@ def encode_osc_message_1f(address, f1):
 
 # ── UDP Sending Loop ──────────────────────────────────────────────────────────
 def OnUIIdle(control, event):
-    if not g_sender.is_sending or not g_sender.sock:
-        return
-        
-    current_time = time.time()
-    if current_time - g_sender.last_send_time < (1.0 / g_sender.fps_limit):
-        return
-    g_sender.last_send_time = current_time
-
-    messages = []
-    
-    # Iterate through all tracked models
-    for name, model in list(g_sender.selected_models.items()):
-        if not model:
-            continue
-            
-        safe_name = name.replace("/", "_").replace(" ", "_")
-        
-        # 1. Get Translation, Rotation, Scaling
-        pos = FBVector3d()
-        rot = FBVector3d()
-        scale = FBVector3d()
-        model.GetVector(pos, FBModelTransformationType.kModelTranslation, False)
-        model.GetVector(rot, FBModelTransformationType.kModelRotation, False)
-        model.GetVector(scale, FBModelTransformationType.kModelScaling, False)
-        
-        messages.append(encode_osc_message_3f(f"/{safe_name}/Translation", pos[0], pos[1], pos[2]))
-        messages.append(encode_osc_message_3f(f"/{safe_name}/Rotation", rot[0], rot[1], rot[2]))
-        messages.append(encode_osc_message_3f(f"/{safe_name}/Scaling", scale[0], scale[1], scale[2]))
-        
-        # 2. Get Custom / Animated Properties
-        for prop in model.PropertyList:
-            # We only want floats/ints that are animated or custom user properties
-            if prop.IsAnimated() or prop.IsUserProperty():
-                if prop.PropertyType in (FBPropertyType.kFBPT_double, FBPropertyType.kFBPT_float, FBPropertyType.kFBPT_int):
-                    prop_name = prop.Name.replace("/", "_").replace(" ", "_")
-                    try:
-                        val = float(prop.Data)
-                        messages.append(encode_osc_message_1f(f"/{safe_name}/{prop_name}", val))
-                    except:
-                        pass
-                        
-    if not messages: return
-    
-    # Pack into OSC Bundle
-    bundle_header = b'#bundle\x00\x00\x00\x00\x00\x00\x00\x00\x01'
-    bundle = bytearray(bundle_header)
-    for msg in messages:
-        bundle.extend(struct.pack('>i', len(msg)))
-        bundle.extend(msg)
-        
     try:
-        g_sender.sock.sendto(bundle, (g_sender.target_ip, g_sender.target_port))
+        if not g_sender.is_sending or not g_sender.sock:
+            return
+            
+        current_time = time.time()
+        if current_time - g_sender.last_send_time < (1.0 / g_sender.fps_limit):
+            return
+        g_sender.last_send_time = current_time
+
+        messages = []
+        debug_info = []
+        
+        # Iterate through all tracked models
+        for name, model in list(g_sender.selected_models.items()):
+            if not model:
+                continue
+                
+            safe_name = name.replace("/", "_").replace(" ", "_")
+            
+            # 1. Get Translation, Rotation, Scaling
+            pos = FBVector3d()
+            rot = FBVector3d()
+            scale = FBVector3d()
+            model.GetVector(pos, FBModelTransformationType.kModelTranslation, False)
+            model.GetVector(rot, FBModelTransformationType.kModelRotation, False)
+            model.GetVector(scale, FBModelTransformationType.kModelScaling, False)
+            
+            messages.append(encode_osc_message_3f(f"/{safe_name}/Translation", pos[0], pos[1], pos[2]))
+            debug_info.append(f"/{safe_name}/Translation: {pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}")
+            
+            messages.append(encode_osc_message_3f(f"/{safe_name}/Rotation", rot[0], rot[1], rot[2]))
+            debug_info.append(f"/{safe_name}/Rotation: {rot[0]:.2f}, {rot[1]:.2f}, {rot[2]:.2f}")
+            
+            messages.append(encode_osc_message_3f(f"/{safe_name}/Scaling", scale[0], scale[1], scale[2]))
+            debug_info.append(f"/{safe_name}/Scaling: {scale[0]:.2f}, {scale[1]:.2f}, {scale[2]:.2f}")
+            
+            # 2. Get Custom / Animated Properties
+            for prop in model.PropertyList:
+                try:
+                    is_animated = prop.IsAnimatable() and hasattr(prop, 'IsAnimated') and prop.IsAnimated()
+                    is_user = hasattr(prop, 'IsUserProperty') and prop.IsUserProperty()
+                    
+                    if is_animated or is_user:
+                        if prop.PropertyType in (FBPropertyType.kFBPT_double, FBPropertyType.kFBPT_float, FBPropertyType.kFBPT_int):
+                            prop_name = prop.Name.replace("/", "_").replace(" ", "_")
+                            try:
+                                val = float(prop.Data)
+                                messages.append(encode_osc_message_1f(f"/{safe_name}/{prop_name}", val))
+                                debug_info.append(f"/{safe_name}/{prop_name}: {val:.2f}")
+                            except:
+                                pass
+                except:
+                    pass
+                            
+        if not messages:
+            g_sender.frame_counter += 1
+            if g_sender.frame_counter % 30 == 0:
+                if "lbl_status" in g_ui:
+                    g_ui["lbl_status"].Caption = "Status: No models or data to send"
+                if "memo_debug" in g_ui:
+                    g_ui["memo_debug"].Text = "No models tracked. Please add models."
+            return
+        
+        try:
+            target = (g_sender.target_ip, g_sender.target_port)
+            for msg in messages:
+                g_sender.sock.sendto(msg, target)
+        except Exception as e:
+            pass # We don't want UDP errors to crash the UI thread entirely
+            
+        g_sender.frame_counter += 1
+        if g_sender.frame_counter % 30 == 0:
+            if "lbl_status" in g_ui:
+                g_ui["lbl_status"].Caption = f"Status: Sending {len(messages)} msgs to {target[0]}:{target[1]}"
+            if "memo_debug" in g_ui:
+                g_ui["memo_debug"].Text = "\n".join(debug_info)
     except Exception as e:
-        print("Mobu2OSC UDP Send Error:", e)
+        if "lbl_status" in g_ui:
+            g_ui["lbl_status"].Caption = f"Crash in Idle Loop: {e}"
 
 
 # ── UI Callbacks ──────────────────────────────────────────────────────────────
@@ -155,7 +181,8 @@ def OnStartStreamingClick(control, event):
             g_ui["lbl_status"].Caption = f"Status: Streaming to {ip}:{port}"
             
             sys = FBSystem()
-            sys.OnUIIdle.Remove(OnUIIdle)
+            try: sys.OnUIIdle.Remove(OnUIIdle)
+            except: pass
             sys.OnUIIdle.Add(OnUIIdle)
             import sys as python_sys
             python_sys.mobu2osc_idle_func = OnUIIdle
@@ -178,8 +205,8 @@ def OnStartStreamingClick(control, event):
 
 # ── UI Creation ───────────────────────────────────────────────────────────────
 def PopulateTool(tool):
-    tool.StartSizeX = 350
-    tool.StartSizeY = 600
+    tool.StartSizeX = 380
+    tool.StartSizeY = 800
     
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft, "")
     y = FBAddRegionParam(0, FBAttachType.kFBAttachTop, "")
@@ -237,6 +264,11 @@ def PopulateTool(tool):
     g_ui["lbl_status"] = FBLabel()
     g_ui["lbl_status"].Caption = "Status: Stopped"
     
+    # --- Debug Output ---
+    g_ui["lyt_debug"] = FBHBoxLayout()
+    g_ui["memo_debug"] = FBMemo()
+    g_ui["lyt_debug"].Add(g_ui["memo_debug"], 330)
+    
     # --- Layout Assembly ---
     g_ui["main_layout"].Add(create_header("NETWORK"), 25)
     g_ui["main_layout"].Add(g_ui["lyt_ip"], 30)
@@ -248,6 +280,9 @@ def PopulateTool(tool):
     g_ui["main_layout"].Add(create_header("CONTROL"), 25)
     g_ui["main_layout"].Add(g_ui["btn_stream"], 40)
     g_ui["main_layout"].Add(g_ui["lbl_status"], 30)
+    
+    g_ui["main_layout"].Add(create_header("DEBUG OUTPUT"), 25)
+    g_ui["main_layout"].Add(g_ui["lyt_debug"], 180)
 
 def CreateTool():
     tool_name = "Saint's Mobu2OSC Sender"
