@@ -149,7 +149,7 @@ def OnConnectClick(control, event):
     if not g_livelink.is_connected:
         try:
             ip = g_ui["edit_ip"].Text
-            port = int(g_ui["edit_port"].Value)
+            port = int(g_ui["edit_port"].Text.strip())
             g_livelink.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             g_livelink.sock.bind((ip, port))
             g_livelink.sock.setblocking(False)
@@ -353,7 +353,7 @@ def OnForceRecordClick(control, event):
             print("Error setting out point:", e)
 
 def PopulateTool(tool):
-    tool.StartSizeX = 350
+    tool.StartSizeX = 250
     tool.StartSizeY = 500
     
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft, "")
@@ -376,9 +376,8 @@ def PopulateTool(tool):
     g_ui["lyt_port"] = FBHBoxLayout()
     g_ui["lbl_port"] = FBLabel()
     g_ui["lbl_port"].Caption = "UDP Port:"
-    g_ui["edit_port"] = FBEditNumber()
-    g_ui["edit_port"].Value = 11111 # Live Link Face default port
-    g_ui["edit_port"].Precision = 0
+    g_ui["edit_port"] = FBEdit()
+    g_ui["edit_port"].Text = "11111" # Live Link Face default port
     g_ui["lyt_port"].Add(g_ui["lbl_port"], 70)
     g_ui["lyt_port"].Add(g_ui["edit_port"], 100)
     

@@ -456,64 +456,56 @@ def OnActorChange(control, event):
     g_ui["slider_hip_z"].Value = state.hip_scale_z
     set_fps(state.fps_limit)
     if state.is_connected:
-        g_ui["btn_start"].Caption = "Sending..."
-        g_ui["btn_start"].Enabled = False
-        g_ui["btn_stop"].Enabled  = True
+        g_ui["btn_stream"].Caption = "Stop Sending"
         g_ui["lbl_status"].Caption = "Actor {} Sending to {}:{}".format(
             act_id, state.target_ip, state.target_port)
     else:
-        g_ui["btn_start"].Caption = "Start Sending"
-        g_ui["btn_start"].Enabled = True
-        g_ui["btn_stop"].Enabled  = False
+        g_ui["btn_stream"].Caption = "Start Sending"
         g_ui["lbl_status"].Caption = "Actor {} Status: Stopped".format(act_id)
 
-def OnStartSendClick(control, event):
+def OnToggleSendClick(control, event):
     act_id = current_actor()
     state = g_sender_states[act_id]
-    if state.is_connected: return
-    root_model, bones = scan_vmc_bones(act_id)
-    if not root_model and not bones:
-        FBMessageBox("Warning",
-            "No VMC_ skeleton found for Actor {}!\n".format(act_id) +
-            "Please use 'Generate Skeleton' first.", "OK")
-        return
-    try:
-        state.target_ip   = g_ui["edit_ip"].Text
-        state.target_port = int(g_ui["edit_port"].Value)
-        state.root_cache  = root_model
-        state.bone_cache  = bones
-        state.sock        = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        state.is_connected = True
-        state.frame_count = 0
-        state.last_send_time = 0.0
+    
+    if not state.is_connected:
+        # Start Sending logic
+        root_model, bones = scan_vmc_bones(act_id)
+        if not root_model and not bones:
+            FBMessageBox("Warning",
+                "No VMC_ skeleton found for Actor {}!\n".format(act_id) +
+                "Please use 'Generate Skeleton' first.", "OK")
+            return
+        try:
+            state.target_ip   = g_ui["edit_ip"].Text
+            state.target_port = int(g_ui["edit_port"].Text.strip())
+            state.root_cache  = root_model
+            state.bone_cache  = bones
+            state.sock        = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            state.is_connected = True
+            state.frame_count = 0
+            state.last_send_time = 0.0
 
-        g_ui["btn_start"].Caption = "Sending..."
-        g_ui["btn_start"].Enabled = False
-        g_ui["btn_stop"].Enabled  = True
-        g_ui["lbl_status"].Caption = "Actor {} Sending to {}:{} ({} bones)".format(
-            act_id, state.target_ip, state.target_port, len(bones))
+            g_ui["btn_stream"].Caption = "Stop Sending"
+            g_ui["lbl_status"].Caption = "Actor {} Sending to {}:{} ({} bones)".format(
+                act_id, state.target_ip, state.target_port, len(bones))
 
-        fb_sys = FBSystem()
-        fb_sys.OnUIIdle.Remove(OnSendUIIdle)
-        fb_sys.OnUIIdle.Add(OnSendUIIdle)
-        import sys as python_sys
-        python_sys.mobu2vmc_multi_idle_func = OnSendUIIdle
-    except Exception as e:
-        g_ui["lbl_status"].Caption = "Error: " + str(e)
-
-def OnStopSendClick(control, event):
-    act_id = current_actor()
-    state = g_sender_states[act_id]
-    state.is_connected = False
-    if state.sock:
-        try: state.sock.close()
-        except: pass
-        state.sock = None
-        
-    g_ui["btn_start"].Caption = "Start Sending"
-    g_ui["btn_start"].Enabled = True
-    g_ui["btn_stop"].Enabled  = False
-    g_ui["lbl_status"].Caption = "Actor {} Status: Stopped".format(act_id)
+            fb_sys = FBSystem()
+            fb_sys.OnUIIdle.Remove(OnSendUIIdle)
+            fb_sys.OnUIIdle.Add(OnSendUIIdle)
+            import sys as python_sys
+            python_sys.mobu2vmc_multi_idle_func = OnSendUIIdle
+        except Exception as e:
+            g_ui["lbl_status"].Caption = "Error: " + str(e)
+    else:
+        # Stop Sending logic
+        state.is_connected = False
+        if state.sock:
+            try: state.sock.close()
+            except: pass
+            state.sock = None
+            
+        g_ui["btn_stream"].Caption = "Start Sending"
+        g_ui["lbl_status"].Caption = "Actor {} Status: Stopped".format(act_id)
 
 # ── Delete Skeleton ───────────────────────────────────────────────────────────
 def OnDeleteSkeletonClick(control, event):
@@ -547,7 +539,7 @@ def OnDeleteSkeletonClick(control, event):
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 def PopulateTool(tool):
-    tool.StartSizeX = 350
+    tool.StartSizeX = 300
     tool.StartSizeY = 570
 
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft,   "")
@@ -595,8 +587,7 @@ def PopulateTool(tool):
 
     g_ui["lyt_port"]  = FBHBoxLayout()
     g_ui["lbl_port"]  = FBLabel();      g_ui["lbl_port"].Caption  = "UDP Port:"
-    g_ui["edit_port"] = FBEditNumber(); g_ui["edit_port"].Value    = 39539
-    g_ui["edit_port"].Precision = 0
+    g_ui["edit_port"] = FBEdit(); g_ui["edit_port"].Text    = "39539"
     g_ui["lyt_port"].Add(g_ui["lbl_port"], 80); g_ui["lyt_port"].Add(g_ui["edit_port"], 180)
 
     # ── FPS selector
@@ -634,13 +625,8 @@ def PopulateTool(tool):
     g_ui["lyt_hip_z"].Add(g_ui["lbl_hip_z"],     100)
     g_ui["lyt_hip_z"].Add(g_ui["slider_hip_z"],  150)
 
-    # ── Start / Stop (side by side)
-    g_ui["lyt_ctrl"]  = FBHBoxLayout()
-    g_ui["btn_start"] = btn("Start Sending", OnStartSendClick)
-    g_ui["btn_stop"]  = btn("Stop",          OnStopSendClick)
-    g_ui["btn_stop"].Enabled = False
-    g_ui["lyt_ctrl"].Add(g_ui["btn_start"], 200)
-    g_ui["lyt_ctrl"].Add(g_ui["btn_stop"],   80)
+    # ── Start / Stop (single button)
+    g_ui["btn_stream"] = btn("Start Sending", OnToggleSendClick)
 
     g_ui["lbl_status"] = FBLabel(); g_ui["lbl_status"].Caption = "Status: Stopped"
 
@@ -657,7 +643,7 @@ def PopulateTool(tool):
     lay.Add(g_ui["lyt_fps"],             30)
     lay.Add(g_ui["lyt_hip_x"],           30)
     lay.Add(g_ui["lyt_hip_z"],           30)
-    lay.Add(g_ui["lyt_ctrl"],            35)
+    lay.Add(g_ui["btn_stream"],          35)
     lay.Add(g_ui["lbl_status"],          30)
 
 def CreateTool():

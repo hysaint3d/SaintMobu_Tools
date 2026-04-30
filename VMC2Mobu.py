@@ -225,7 +225,7 @@ def OnConnectClick(control, event):
     if not g_vmc.is_connected:
         try:
             ip = g_ui["edit_ip"].Text
-            port = int(g_ui["edit_port"].Value)
+            port = int(g_ui["edit_port"].Text.strip())
             g_vmc.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             g_vmc.sock.bind((ip, port))
             g_vmc.sock.setblocking(False)
@@ -613,10 +613,8 @@ def PopulateTool(tool):
     g_ui["lbl_port"] = FBLabel()
     g_ui["lbl_port"].Caption = "UDP Port:"
     
-    g_ui["edit_port"] = FBEditNumber()
-    g_ui["edit_port"].Value = 39539
-    g_ui["edit_port"].Precision = 0
-    
+    g_ui["edit_port"] = FBEdit()
+    g_ui["edit_port"].Text = "39539"
     g_ui["lyt_port"].Add(g_ui["lbl_port"], 70)
     g_ui["lyt_port"].Add(g_ui["edit_port"], 100)
     

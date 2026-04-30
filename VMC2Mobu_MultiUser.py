@@ -246,7 +246,7 @@ def OnConnectClick(control, event):
     if not state.is_connected:
         try:
             state.ip = g_ui["edit_ip"].Text
-            state.port = int(g_ui["edit_port"].Value)
+            state.port = int(g_ui["edit_port"].Text.strip())
             state.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             state.sock.bind((state.ip, state.port))
             state.sock.setblocking(False)
@@ -616,7 +616,7 @@ def OnForceRecordClick(control, event):
             print("Error setting out point:", e)
 
 def PopulateTool(tool):
-    tool.StartSizeX = 350
+    tool.StartSizeX = 250
     tool.StartSizeY = 600
     
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft, "")
@@ -655,10 +655,8 @@ def PopulateTool(tool):
     g_ui["lbl_port"] = FBLabel()
     g_ui["lbl_port"].Caption = "UDP Port:"
     
-    g_ui["edit_port"] = FBEditNumber()
-    g_ui["edit_port"].Value = 39539
-    g_ui["edit_port"].Precision = 0
-    
+    g_ui["edit_port"] = FBEdit()
+    g_ui["edit_port"].Text = "39539"
     g_ui["lyt_port"].Add(g_ui["lbl_port"], 70)
     g_ui["lyt_port"].Add(g_ui["edit_port"], 100)
     

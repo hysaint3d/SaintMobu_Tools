@@ -455,7 +455,7 @@ def OnStartSendClick(control, event):
         return
     try:
         g_sender.target_ip   = g_ui["edit_ip"].Text
-        g_sender.target_port = int(g_ui["edit_port"].Value)
+        g_sender.target_port = int(g_ui["edit_port"].Text.strip())
         g_sender.root_cache  = root_model
         g_sender.bone_cache  = bones
         g_sender.sock        = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -562,8 +562,7 @@ def PopulateTool(tool):
 
     g_ui["lyt_port"]  = FBHBoxLayout()
     g_ui["lbl_port"]  = FBLabel();      g_ui["lbl_port"].Caption  = "UDP Port:"
-    g_ui["edit_port"] = FBEditNumber(); g_ui["edit_port"].Value    = 39539
-    g_ui["edit_port"].Precision = 0
+    g_ui["edit_port"] = FBEdit(); g_ui["edit_port"].Text    = "39539"
     g_ui["lyt_port"].Add(g_ui["lbl_port"], 80); g_ui["lyt_port"].Add(g_ui["edit_port"], 180)
 
     # ── FPS selector

@@ -189,7 +189,7 @@ def OnConnectClick(control, event):
     if not g_vmc.is_connected:
         try:
             ip = g_ui["edit_ip"].Text
-            port = int(g_ui["edit_port"].Value)
+            port = int(g_ui["edit_port"].Text.strip())
             g_vmc.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             g_vmc.sock.bind((ip, port))
             g_vmc.sock.setblocking(False)
@@ -644,7 +644,7 @@ def OnForceRecordClick(control, event):
             print("Error setting out point:", e)
 
 def PopulateTool(tool):
-    tool.StartSizeX = 350
+    tool.StartSizeX = 250
     tool.StartSizeY = 600
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft, "")
     y = FBAddRegionParam(0, FBAttachType.kFBAttachTop, "")
@@ -654,7 +654,7 @@ def PopulateTool(tool):
     g_ui["main_layout"] = FBVBoxLayout()
     tool.SetControl("main", g_ui["main_layout"])
     g_ui["lyt_ip"] = FBHBoxLayout(); g_ui["lbl_ip"] = FBLabel(); g_ui["lbl_ip"].Caption = "Bind IP:"; g_ui["edit_ip"] = FBEdit(); g_ui["edit_ip"].Text = "0.0.0.0"; g_ui["lyt_ip"].Add(g_ui["lbl_ip"], 70); g_ui["lyt_ip"].Add(g_ui["edit_ip"], 100)
-    g_ui["lyt_port"] = FBHBoxLayout(); g_ui["lbl_port"] = FBLabel(); g_ui["lbl_port"].Caption = "UDP Port:"; g_ui["edit_port"] = FBEditNumber(); g_ui["edit_port"].Value = 39539; g_ui["edit_port"].Precision = 0; g_ui["lyt_port"].Add(g_ui["lbl_port"], 70); g_ui["lyt_port"].Add(g_ui["edit_port"], 100)
+    g_ui["lyt_port"] = FBHBoxLayout(); g_ui["lbl_port"] = FBLabel(); g_ui["lbl_port"].Caption = "UDP Port:"; g_ui["edit_port"] = FBEdit(); g_ui["edit_port"].Text = "39539"; g_ui["lyt_port"].Add(g_ui["lbl_port"], 70); g_ui["lyt_port"].Add(g_ui["edit_port"], 100)
     g_ui["btn_connect"] = FBButton(); g_ui["btn_connect"].Caption = "Connect"; g_ui["btn_connect"].OnClick.Add(OnConnectClick)
     g_ui["btn_gen_skeleton"] = FBButton(); g_ui["btn_gen_skeleton"].Caption = "Generate Skeleton"; g_ui["btn_gen_skeleton"].OnClick.Add(OnGenerateClick)
     g_ui["btn_zero"] = FBButton(); g_ui["btn_zero"].Caption = "Zero Rotation (歸零)"; g_ui["btn_zero"].OnClick.Add(OnZeroRotationClick)
