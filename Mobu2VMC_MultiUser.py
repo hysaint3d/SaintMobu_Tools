@@ -507,6 +507,122 @@ def OnToggleSendClick(control, event):
         g_ui["btn_stream"].Caption = "Start Sending"
         g_ui["lbl_status"].Caption = "Actor {} Status: Stopped".format(act_id)
 
+# ── Match Proportions ───────────────────────────────────────────────────────────
+def OnRefreshCharListClick(control, event):
+    """Scan scene for HIK characters and populate the dropdown."""
+    if "list_char_source" not in g_ui: return
+    g_ui["list_char_source"].Items.removeAll()
+    for char in FBSystem().Scene.Characters:
+        try:
+            # Check if character has HipsLink defined (= characterized)
+            hip_prop = None
+            for prop in char.PropertyList:
+                if prop.Name == "HipsLink":
+                    hip_prop = prop
+                    break
+            if hip_prop is not None:
+                g_ui["list_char_source"].Items.append(char.Name)
+        except: pass
+    if len(g_ui["list_char_source"].Items) > 0:
+        g_ui["list_char_source"].ItemIndex = 0
+
+def OnMatchProportionsClick(control, event):
+    """Read Global bone positions from selected HIK character and apply to VMC skeleton."""
+    act_id = current_actor()
+    prefix = "VMC{}:".format(act_id)
+    
+    # Get selected character name from list
+    if "list_char_source" not in g_ui: return
+    idx = g_ui["list_char_source"].ItemIndex
+    if idx < 0 or idx >= len(g_ui["list_char_source"].Items):
+        FBMessageBox("Error", "Please select a source character first.", "OK")
+        return
+    char_name = g_ui["list_char_source"].Items[idx]
+    
+    # Find the FBCharacter object
+    source_char = None
+    for char in FBSystem().Scene.Characters:
+        if char.Name == char_name:
+            source_char = char
+            break
+    if source_char is None:
+        FBMessageBox("Error", "Character '{}' not found in scene.".format(char_name), "OK")
+        return
+    
+    # Build a map of Link property name -> model from source character
+    link_to_model = {}
+    for prop in source_char.PropertyList:
+        if not prop.Name.endswith("Link"): continue
+        try:
+            # FBPropertyListObject supports index access
+            for i in range(len(prop)):
+                obj = prop[i]
+                if obj and isinstance(obj, FBModel):
+                    link_to_model[prop.Name] = obj
+                    break
+        except: pass
+    
+    if not link_to_model:
+        FBMessageBox("Error", "Could not read bone data from character '{}'.\nMake sure the character is fully characterized with bones assigned.".format(char_name), "OK")
+        return
+    
+    # Build VMC bone lookup dict
+    vmc_bones = {}
+    for comp in FBSystem().Scene.Components:
+        try:
+            if not isinstance(comp, FBModel): continue
+            name = comp.LongName if hasattr(comp, "LongName") and comp.LongName else comp.Name
+            if name.startswith(prefix + "VMC_"):
+                bn = name[len(prefix + "VMC_"):]
+                vmc_bones[bn] = comp
+        except: pass
+    
+    # Also handle VMC_Root
+    root_bone = None
+    for comp in FBSystem().Scene.Components:
+        try:
+            if not isinstance(comp, FBModel): continue
+            name = comp.LongName if hasattr(comp, "LongName") and comp.LongName else comp.Name
+            if name == "{}VMC_Root".format(prefix):
+                root_bone = comp
+                break
+        except: pass
+    
+    if not vmc_bones and not root_bone:
+        FBMessageBox("Error",
+            "No VMC skeleton found for Actor {}.\nPlease Generate Skeleton first.".format(act_id), "OK")
+        return
+    
+    # Step 1: Delete VMC HIK Character if it exists (so bones are free to move)
+    vmc_char_name = "{}VMC_HIK_Character".format(prefix)
+    for char in list(FBSystem().Scene.Characters):
+        if char.Name == vmc_char_name or (hasattr(char, "LongName") and char.LongName == vmc_char_name):
+            try:
+                char.SetCharacterizeOn(False)
+                char.FBDelete()
+            except: pass
+    FBSystem().Scene.Evaluate()
+    
+    # Step 2: Move VMC bones to match source character Global positions (no HIK lock now)
+    matched = 0
+    for vmc_bone_name, vmc_model in vmc_bones.items():
+        hik_link_name = HIK_MAPPING.get(vmc_bone_name)
+        if not hik_link_name: continue
+        src_model = link_to_model.get(hik_link_name)
+        if not src_model: continue
+        try:
+            src_pos = FBVector3d()
+            src_model.GetVector(src_pos, FBModelTransformationType.kModelTranslation, True)
+            vmc_model.SetVector(src_pos, FBModelTransformationType.kModelTranslation, True)
+            matched += 1
+        except: pass
+    
+    # Root stays at origin, do not move it
+    FBSystem().Scene.Evaluate()
+    
+    FBMessageBox("Done",
+        "Matched {} bones to '{}'.\nNow click 'Characterize HIK' to lock the new proportions.".format(matched, char_name), "OK")
+
 # ── Delete Skeleton ───────────────────────────────────────────────────────────
 def OnDeleteSkeletonClick(control, event):
     act_id = current_actor()
@@ -540,7 +656,7 @@ def OnDeleteSkeletonClick(control, event):
 # ── UI ────────────────────────────────────────────────────────────────────────
 def PopulateTool(tool):
     tool.StartSizeX = 300
-    tool.StartSizeY = 570
+    tool.StartSizeY = 700
 
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft,   "")
     y = FBAddRegionParam(0, FBAttachType.kFBAttachTop,    "")
@@ -578,6 +694,14 @@ def PopulateTool(tool):
     g_ui["btn_gen"]   = btn("Generate Standard Skeleton",   OnGenerateSkeletonClick)
     g_ui["btn_char"]  = btn("Characterize HIK",             OnCharacterizeClick)
     g_ui["btn_del"]   = btn("Delete VMC Skeleton",          OnDeleteSkeletonClick)
+    g_ui["btn_match"] = btn("Match Proportions to HIK",    OnMatchProportionsClick)
+    
+    # HIK Character source list
+    g_ui["lyt_char_src"] = FBHBoxLayout()
+    g_ui["list_char_source"] = FBList()
+    g_ui["btn_refresh_chars"] = btn("Refresh", OnRefreshCharListClick)
+    g_ui["lyt_char_src"].Add(g_ui["list_char_source"], 175)
+    g_ui["lyt_char_src"].Add(g_ui["btn_refresh_chars"], 70)
 
     # ── Send Target
     g_ui["lyt_ip"]   = FBHBoxLayout()
@@ -635,6 +759,9 @@ def PopulateTool(tool):
     lay.Add(hdr("SKELETON"),              25)
     lay.Add(g_ui["btn_scan"],             35)
     lay.Add(g_ui["btn_gen"],              35)
+    lay.Add(hdr("MATCH PROPORTIONS"),     25)
+    lay.Add(g_ui["lyt_char_src"],         30)
+    lay.Add(g_ui["btn_match"],            35)
     lay.Add(g_ui["btn_char"],             35)
     lay.Add(g_ui["btn_del"],             35)
     lay.Add(hdr("SEND & CONTROL"),        25)
@@ -645,6 +772,9 @@ def PopulateTool(tool):
     lay.Add(g_ui["lyt_hip_z"],           30)
     lay.Add(g_ui["btn_stream"],          35)
     lay.Add(g_ui["lbl_status"],          30)
+    
+    # Auto-populate character list on open
+    OnRefreshCharListClick(None, None)
 
 def CreateTool():
     tool_name = "Saint's Mobu2VMC Sender"
