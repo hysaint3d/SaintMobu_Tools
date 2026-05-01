@@ -83,6 +83,26 @@ HIK_STD = {k: v.replace("Link","") for k, v in HIK_LINK.items()}
 # HIK standard root name
 HIK_ROOT = "Reference"
 
+# VMC bone name -> UE Mannequin bone name
+UE_NAME = {
+    "Hips":"pelvis","Spine":"spine_01","Chest":"spine_02","UpperChest":"spine_03",
+    "Neck":"neck_01","Head":"head",
+    "LeftShoulder":"clavicle_l","LeftUpperArm":"upperarm_l","LeftLowerArm":"lowerarm_l","LeftHand":"hand_l",
+    "RightShoulder":"clavicle_r","RightUpperArm":"upperarm_r","RightLowerArm":"lowerarm_r","RightHand":"hand_r",
+    "LeftUpperLeg":"thigh_l","LeftLowerLeg":"calf_l","LeftFoot":"foot_l","LeftToes":"ball_l",
+    "RightUpperLeg":"thigh_r","RightLowerLeg":"calf_r","RightFoot":"foot_r","RightToes":"ball_r",
+    "LeftThumbProximal":"thumb_01_l","LeftThumbIntermediate":"thumb_02_l","LeftThumbDistal":"thumb_03_l",
+    "LeftIndexProximal":"index_01_l","LeftIndexIntermediate":"index_02_l","LeftIndexDistal":"index_03_l",
+    "LeftMiddleProximal":"middle_01_l","LeftMiddleIntermediate":"middle_02_l","LeftMiddleDistal":"middle_03_l",
+    "LeftRingProximal":"ring_01_l","LeftRingIntermediate":"ring_02_l","LeftRingDistal":"ring_03_l",
+    "LeftLittleProximal":"pinky_01_l","LeftLittleIntermediate":"pinky_02_l","LeftLittleDistal":"pinky_03_l",
+    "RightThumbProximal":"thumb_01_r","RightThumbIntermediate":"thumb_02_r","RightThumbDistal":"thumb_03_r",
+    "RightIndexProximal":"index_01_r","RightIndexIntermediate":"index_02_r","RightIndexDistal":"index_03_r",
+    "RightMiddleProximal":"middle_01_r","RightMiddleIntermediate":"middle_02_r","RightMiddleDistal":"middle_03_r",
+    "RightRingProximal":"ring_01_r","RightRingIntermediate":"ring_02_r","RightRingDistal":"ring_03_r",
+    "RightLittleProximal":"pinky_01_r","RightLittleIntermediate":"pinky_02_r","RightLittleDistal":"pinky_03_r",
+}
+
 # VMC bone name -> VMC bone name (identity, for clarity)
 VMC_NAME = {k: k for k in BONE_POS}
 
@@ -107,17 +127,23 @@ def get_ns():
     return raw
 
 def get_mode():
-    return "hik" if g_ui["list_mode"].ItemIndex == 0 else "vmc"
+    idx = g_ui["list_mode"].ItemIndex
+    if idx == 0: return "hik"
+    if idx == 1: return "vmc"
+    return "ue"
 
 def bone_scene_name(vmc_key, mode, ns):
     """Full scene name for a bone."""
     if mode == "vmc":
         return ns + "VMC_" + vmc_key
+    elif mode == "ue":
+        return ns + "UE_" + UE_NAME.get(vmc_key, vmc_key)
     else:
         return ns + HIK_STD[vmc_key]
 
 def root_scene_name(mode, ns):
     if mode == "vmc": return ns + "VMC_Root"
+    if mode == "ue":  return ns + "UE_root"
     return ns + HIK_ROOT
 
 def get_characterized_chars():
@@ -143,7 +169,9 @@ def get_link_model_map(char):
     return m
 
 def delete_hik_char_for(mode, ns):
-    char_name = (ns + "VMC_HIK_Character") if mode == "vmc" else (ns + "HIK_Character")
+    if mode == "vmc":   char_name = ns + "VMC_HIK_Character"
+    elif mode == "ue":  char_name = ns + "UE_HIK_Character"
+    else:               char_name = ns + "HIK_Character"
     for char in list(FBSystem().Scene.Characters):
         n = getattr(char, "LongName", None) or char.Name
         if n == char_name:
@@ -211,6 +239,11 @@ def do_generate():
     for m in models.values():
         m.SetVector(FBVector3d(0,0,0), FBModelTransformationType.kModelRotation, False)
 
+    # Hide parent link on Hips to avoid ugly line from Root through the crotch
+    if "Hips" in models:
+        prop = models["Hips"].PropertyList.Find("Show Parent Link")
+        if prop: prop.Data = False
+
     FBSystem().Scene.Evaluate()
 
     g_st["bones"] = models
@@ -219,7 +252,9 @@ def do_generate():
     g_st["ns"]    = ns
 
     # Auto-create HIK character definition (unlocked) so bones stay editable
-    char_name = (ns + "VMC_HIK_Character") if mode == "vmc" else (ns + "HIK_Character")
+    if mode == "vmc":  char_name = ns + "VMC_HIK_Character"
+    elif mode == "ue": char_name = ns + "UE_HIK_Character"
+    else:              char_name = ns + "HIK_Character"
     char = None
     for c in FBSystem().Scene.Characters:
         n = getattr(c, "LongName", None) or c.Name
@@ -338,7 +373,9 @@ def do_characterize():
         FBMessageBox("Error", "No skeleton found in scene.\nNamespace='{}', Mode='{}'.\nPlease Generate first.".format(ns, mode), "OK")
         return
 
-    char_name = (ns + "VMC_HIK_Character") if mode == "vmc" else (ns + "HIK_Character")
+    if mode == "vmc":  char_name = ns + "VMC_HIK_Character"
+    elif mode == "ue": char_name = ns + "UE_HIK_Character"
+    else:              char_name = ns + "HIK_Character"
     char = None
     for c in FBSystem().Scene.Characters:
         n = getattr(c, "LongName", None) or c.Name
@@ -445,7 +482,7 @@ def OnDeleteClick(c, e):      do_delete()
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 def PopulateTool(tool):
-    tool.StartSizeX = 300
+    tool.StartSizeX = 250
     tool.StartSizeY = 460
 
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft,   "")
@@ -464,11 +501,12 @@ def PopulateTool(tool):
     lyt_mode = FBHBoxLayout()
     lbl_mode = FBLabel(); lbl_mode.Caption = "Skeleton:"
     g_ui["list_mode"] = FBList()
-    g_ui["list_mode"].Items.append("HIK")
-    g_ui["list_mode"].Items.append("VMC")
+    g_ui["list_mode"].Items.append("MotionBuilder (HIK)")
+    g_ui["list_mode"].Items.append("Humanoid (VMC)")
+    g_ui["list_mode"].Items.append("Mannequins (UE)")
     g_ui["list_mode"].ItemIndex = 0  # HIK is default
     lyt_mode.Add(lbl_mode, 65)
-    lyt_mode.Add(g_ui["list_mode"], 200)
+    lyt_mode.Add(g_ui["list_mode"], 170)
     lay.Add(lyt_mode, 30)
 
     # Namespace input (manual)
@@ -476,7 +514,7 @@ def PopulateTool(tool):
     lbl_ns = FBLabel(); lbl_ns.Caption = "Namespace:"
     g_ui["edit_ns"] = FBEdit(); g_ui["edit_ns"].Text = "A"
     lyt_ns.Add(lbl_ns,         75)
-    lyt_ns.Add(g_ui["edit_ns"], 185)
+    lyt_ns.Add(g_ui["edit_ns"], 155)
     lay.Add(lyt_ns, 30)
 
     # Height
@@ -499,8 +537,8 @@ def PopulateTool(tool):
     lyt_src = FBHBoxLayout()
     g_ui["list_source"] = FBList()
     btn_ref = FBButton(); btn_ref.Caption = "Refresh"; btn_ref.OnClick.Add(OnRefreshClick)
-    lyt_src.Add(g_ui["list_source"], 185)
-    lyt_src.Add(btn_ref, 75)
+    lyt_src.Add(g_ui["list_source"], 160)
+    lyt_src.Add(btn_ref, 65)
     lay.Add(lyt_src, 25)
 
     btn_match = FBButton(); btn_match.Caption = "Match & Characterize"; btn_match.OnClick.Add(OnMatchClick)
@@ -513,7 +551,7 @@ def PopulateTool(tool):
     OnRefreshClick(None, None)
 
 def CreateTool():
-    tool = FBCreateUniqueTool("Skeleton Generator")
+    tool = FBCreateUniqueTool("Saint's Skeleton Generator")
     if tool:
         PopulateTool(tool)
         ShowTool(tool)
