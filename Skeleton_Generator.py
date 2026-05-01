@@ -308,8 +308,15 @@ def do_generate():
         status("Generated {} skeleton ({}cm). Characterize manually if needed.".format(label, h_val, ns))
 
 def do_match():
+    # Fallback: if bones not in memory (e.g. script was reloaded), scan from scene
     if not g_st["bones"]:
-        FBMessageBox("Error", "No skeleton in memory.\nPlease Generate first.", "OK"); return
+        mode = get_mode(); ns = get_ns()
+        root, bones = scan_bones_from_scene(mode, ns)
+        if bones:
+            g_st["bones"] = bones; g_st["root"] = root
+            g_st["mode"] = mode;   g_st["ns"]   = ns
+        else:
+            FBMessageBox("Error", "No skeleton in memory or scene.\nPlease Generate first.", "OK"); return
 
     idx = g_ui["list_source"].ItemIndex
     if idx < 0 or idx >= len(g_ui["list_source"].Items):

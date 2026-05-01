@@ -514,20 +514,21 @@ def OnRefreshCharListClick(control, event):
     g_ui["list_char_source"].Items.removeAll()
     for char in FBSystem().Scene.Characters:
         try:
-            # Check if character has HipsLink defined (= characterized)
-            hip_prop = None
+            # Check if HipsLink property exists AND has an actual bone assigned
             for prop in char.PropertyList:
                 if prop.Name == "HipsLink":
-                    hip_prop = prop
+                    if len(prop) > 0:  # Must have a bone actually assigned
+                        g_ui["list_char_source"].Items.append(char.Name)
                     break
-            if hip_prop is not None:
-                g_ui["list_char_source"].Items.append(char.Name)
         except: pass
     if len(g_ui["list_char_source"].Items) > 0:
         g_ui["list_char_source"].ItemIndex = 0
 
 def OnMatchProportionsClick(control, event):
     """Read Global bone positions from selected HIK character and apply to VMC skeleton."""
+    # Auto-refresh character list before matching
+    OnRefreshCharListClick(None, None)
+
     act_id = current_actor()
     prefix = "VMC{}:".format(act_id)
     
