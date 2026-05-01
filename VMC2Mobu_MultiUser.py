@@ -1,3 +1,22 @@
+"""
+VMC2Mobu_MultiUser.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Receive VMC (Virtual Motion Capture) bone and blendshape data via OSC/UDP
+from senders such as Warudo and drive skeleton models inside MotionBuilder.
+Supports up to 3 simultaneous actors, each with an independent namespace
+(VMC1/VMC2/VMC3) and UDP port.
+
+Workflow:
+  1. Select Actor → Set Bind IP & Port → Connect
+  2. Generate Skeleton (requires live VMC bone data)
+  3. Characterize Skeleton as HIK
+  4. (Optional) Generate Expressions → Connect Expression to selected model
+  5. (Optional) Record VMC — creates a new timestamped Take
+
+由小聖腦絲與 Antigravity 協作完成
+https://www.facebook.com/hysaint3d.mocap
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
 import os
 import sys
 import socket

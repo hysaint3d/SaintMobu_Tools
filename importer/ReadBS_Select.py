@@ -1,3 +1,19 @@
+"""
+ReadBS_Select.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Import facial blendshape animation from a JSON file (Warudo / custom capture
+format) and bake keyframes onto a selected model at 30 FPS.
+Strips the "Facial_Bs." prefix from shape names before matching.
+
+Workflow:
+  1. Select target model in scene
+  2. Run script → browse for .json file
+  3. Keyframes are applied from JSON BlendShapeDatas array
+
+由小聖腦絲與 Antigravity 協作完成
+https://www.facebook.com/hysaint3d.mocap
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
 import json
 from pyfbsdk import *
 from pyfbsdk_additions import *

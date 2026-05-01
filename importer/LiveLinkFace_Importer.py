@@ -1,3 +1,18 @@
+"""
+LiveLinkFace_Importer.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Import ARKit blendshape animation from an Unreal Engine LiveLink Face CSV
+export and bake it as keyframes onto the selected model's blendshape properties.
+
+Workflow:
+  1. Select target model in scene
+  2. Run script → browse for .csv file
+  3. Keyframes are baked at 30 FPS onto matching ARKit blendshape channels
+
+由小聖腦絲與 Antigravity 協作完成
+https://www.facebook.com/hysaint3d.mocap
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
 from pyfbsdk import *
 import csv
 

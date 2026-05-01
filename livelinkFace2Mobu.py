@@ -1,3 +1,19 @@
+"""
+livelinkFace2Mobu.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Receive Apple LiveLink Face (ARKit) blendshape data via UDP and stream it
+into MotionBuilder as animatable custom properties on a LiveLink_Data null.
+
+Workflow:
+  1. Set Bind IP & UDP Port → Connect
+  2. Create Data Channels on LiveLink_Data
+  3. Connect Channels to Selected Model (Relation Constraint)
+  4. (Optional) Record LiveLink — creates a new timestamped Take
+
+由小聖腦絲與 Antigravity 協作完成
+https://www.facebook.com/hysaint3d.mocap
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
 import os
 import sys
 import socket

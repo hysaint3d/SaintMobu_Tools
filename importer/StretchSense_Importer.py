@@ -1,3 +1,19 @@
+"""
+StretchSense_Importer.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Import StretchSense glove finger rotation data from a CSV export and bake
+it as keyframes onto matching finger bones in the MotionBuilder scene.
+Supports left/right hand selection and multi-encoding CSV files.
+
+Workflow:
+  1. Run script → browse for StretchSense .csv file
+  2. Choose hand side (Left / Right)
+  3. Rotation keyframes are baked onto matched "_l" or "_r" finger bones
+
+由小聖腦絲與 Antigravity 協作完成
+https://www.facebook.com/hysaint3d.mocap
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
 from pyfbsdk import *
 import csv
 

@@ -1,3 +1,22 @@
+"""
+StudioGloves2Mobu.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Receive VMC finger/hand bone data from StudioGloves (StretchSense gloves via
+Warudo) and apply it to MotionBuilder. Generates a dedicated VMC hand skeleton
+with specialized left/right hand roots, and merges finger definition into an
+existing HIK character via clone-and-characterize.
+
+Workflow:
+  1. Set Bind IP & UDP Port → Connect
+  2. Generate Skeleton (requires live VMC data)
+  3. Connect to Target — parent hand roots to target body character's hands
+  4. Characterize — clone source character and replace finger slots with VMC
+  5. (Optional) Add Fingers to Target — map fingers directly to current char
+
+由小聖腦絲與 Antigravity 協作完成
+https://www.facebook.com/hysaint3d.mocap
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
 import os
 import sys
 import socket

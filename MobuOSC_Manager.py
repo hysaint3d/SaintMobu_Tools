@@ -1,3 +1,23 @@
+"""
+MobuOSC_Manager.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Bidirectional OSC Manager for MotionBuilder — receive arbitrary OSC data
+(exposed as animatable properties on OSC_Data null) and send selected scene
+objects' TRS + animated properties as OSC messages.
+
+Workflow (Receiver):
+  1. Set Bind IP & UDP Port → Connect
+  2. Create Data Channels on OSC_Data
+  3. Connect Channels to Selected Model
+
+Workflow (Sender):
+  1. Select objects in scene → Add Selected
+  2. Set Target IP & Port → Start Streaming
+
+由小聖腦絲與 Antigravity 協作完成
+https://www.facebook.com/hysaint3d.mocap
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
 import os
 import sys
 import socket
