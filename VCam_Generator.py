@@ -22,6 +22,9 @@ https://www.facebook.com/hysaint3d.mocap
 import sys
 import os
 import time
+import json
+import math
+import socket
 import ctypes
 import struct
 import subprocess
@@ -33,6 +36,10 @@ from pyfbsdk_additions import *
 if hasattr(sys, 'vcam_gen_state') and sys.vcam_gen_state:
     try: FBSystem().OnUIIdle.Remove(sys.vcam_gen_idle_func)
     except: pass
+    _s = sys.vcam_gen_state.get('osc_socket')
+    if _s:
+        try: _s.close()
+        except: pass
 
 sys.vcam_gen_state = {
     'camera':          None,
@@ -42,6 +49,10 @@ sys.vcam_gen_state = {
     'is_recording':    False,
     'gamepad_enabled': True,
     'gamepad_index':   0,
+    'shot_count':      0,
+    'osc_socket':      None,
+    'osc_listening':   False,
+    'osc_rigid_body':  None,
 }
 g_state = sys.vcam_gen_state
 g_ui    = {}
@@ -79,6 +90,112 @@ def _read_gamepad():
     except: pass
     return None
 
+# ── ZIG SIM Pro OSC Source ─────────────────────────────────────────────────────
+def _osc_str(data, off):
+    end = data.index(b'\x00', off)
+    s = data[off:end].decode('utf-8', errors='ignore')
+    return s, (end + 4) & ~3
+
+def _osc_parse(data):
+    try:
+        addr, off = _osc_str(data, 0)
+        tag,  off = _osc_str(data, off)
+        if not tag.startswith(','): return None
+        args = []
+        for c in tag[1:]:
+            if   c == 'f': args.append(struct.unpack('>f', data[off:off+4])[0]); off += 4
+            elif c == 'i': args.append(struct.unpack('>i', data[off:off+4])[0]); off += 4
+            elif c == 's': s, off = _osc_str(data, off); args.append(s)
+        return addr, args
+    except: return None
+
+def _quat_to_euler(qx, qy, qz, qw):
+    """Quaternion → XYZ Euler degrees."""
+    rx = math.degrees(math.atan2(2*(qw*qx+qy*qz), 1-2*(qx*qx+qy*qy)))
+    sinp = max(-1.0, min(1.0, 2*(qw*qy-qz*qx)))
+    ry = math.degrees(math.asin(sinp))
+    rz = math.degrees(math.atan2(2*(qw*qz+qx*qy), 1-2*(qy*qy+qz*qz)))
+    return rx, ry, rz
+
+def _apply_zigsim(addr, args):
+    """Apply ZIG SIM ARKit OSC data to the OSC Rigid Body (ZigSim_RigidBody)."""
+    rb = g_state.get('osc_rigid_body')
+    if not rb: return
+    # Position: /zigsim/<uuid>/arposition  (x, y, z) metres → MB centimetres
+    if addr.endswith('/arposition') and len(args) >= 3:
+        rb.SetVector(FBVector3d(args[0]*100, args[1]*100, args[2]*100),
+                     FBModelTransformationType.kModelTranslation, True)
+        FBSystem().Scene.Evaluate()
+    # Rotation: /zigsim/<uuid>/arqt or /attitude  (x, y, z, w) quaternion
+    elif addr.endswith(('/arqt', '/attitude')) and len(args) >= 4:
+        rx, ry, rz = _quat_to_euler(args[0], args[1], args[2], args[3])
+        rb.SetVector(FBVector3d(rx, ry, rz),
+                     FBModelTransformationType.kModelRotation, True)
+        FBSystem().Scene.Evaluate()
+
+def _poll_osc():
+    """Non-blocking drain of incoming OSC UDP packets."""
+    sock = g_state.get('osc_socket')
+    if not sock: return
+    try:
+        while True:
+            data, _ = sock.recvfrom(4096)
+            pkt = _osc_parse(data)
+            if pkt: _apply_zigsim(*pkt)
+    except: pass
+
+def _start_osc():
+    port = int(g_ui['edit_osc_port'].Value) if 'edit_osc_port' in g_ui else 9007
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.bind(('0.0.0.0', port))
+        s.setblocking(False)
+        g_state['osc_socket']    = s
+        g_state['osc_listening'] = True
+        if 'btn_osc_toggle' in g_ui:
+            g_ui['btn_osc_toggle'].Caption = '⏹ Stop OSC'
+        _update_status('OSC listening on :{}'.format(port))
+    except Exception as ex:
+        FBMessageBox('Error', 'Cannot bind port {}:\n{}'.format(port, str(ex)), 'OK')
+
+def _stop_osc():
+    s = g_state.get('osc_socket')
+    if s:
+        try: s.close()
+        except: pass
+    g_state['osc_socket']    = None
+    g_state['osc_listening'] = False
+    if 'btn_osc_toggle' in g_ui:
+        g_ui['btn_osc_toggle'].Caption = '▶ Start OSC'
+    _update_status('OSC stopped.')
+
+def OnOSCToggleClick(c, e):
+    if g_state['osc_listening']: _stop_osc()
+    else: _start_osc()
+
+def OnCreateOSCRigidBodyClick(c, e):
+    """Create a scene Null driven by ZIG SIM OSC data."""
+    # Delete existing one if present
+    existing = g_state.get('osc_rigid_body')
+    if existing:
+        try: existing.FBDelete()
+        except: pass
+    rb = FBModelNull('ZigSim_RigidBody')
+    rb.Show   = True
+    rb.Size   = 30.0
+    rb.Selected = True
+    g_state['osc_rigid_body'] = rb
+    FBSystem().Scene.Evaluate()
+    # Auto-refresh model dropdown and select new rigid body
+    OnRefreshClick(None, None)
+    lst = g_ui.get('list_models')
+    if lst:
+        for i in range(len(lst.Items)):
+            if lst.Items[i] == 'ZigSim_RigidBody':
+                lst.ItemIndex = i
+                break
+    _update_status('ZigSim_RigidBody created. Start OSC then Create & Attach Camera.')
+
 # ── FOV constants ──────────────────────────────────────────────────────────────
 FOV_MIN   = 5.0
 FOV_MAX   = 170.0
@@ -98,12 +215,13 @@ def _find_model(long_name):
     return None
 
 def _scan_models():
-    skip = {'SaintVCam', 'SaintVCam_Offset'}
+    skip = {'SaintVCam', 'SaintVCam_Offset', 'Camera Switcher', 'CameraSwitcher', 'CameraInterest'}
     seen, out = set(), []
     for comp in FBSystem().Scene.Components:
         if isinstance(comp, (FBCamera, FBLight)): continue
         if not isinstance(comp, FBModel): continue
         if comp.Name in skip: continue
+        if comp.Name.startswith('VCam_Shot_'): continue
         n = comp.LongName if hasattr(comp, 'LongName') and comp.LongName else comp.Name
         if n and n not in seen:
             seen.add(n); out.append(n)
@@ -116,6 +234,33 @@ def _cleanup_vcam():
             except: pass
     g_state['camera'] = g_state['offset_null'] = g_state['target_model'] = None
     g_state['is_recording'] = False
+
+# ── Camera display helpers ─────────────────────────────────────────────────────
+def _set_hd_resolution(cam):
+    """Set camera picture format to 1920x1080 HD via best available API."""
+    # Method 1: ResolutionMode enum (MB 2013+)
+    try:
+        for attr in ('kFBResolution1920x1080', 'kFBResolutionFullHD',
+                     'kFBResolutionHD', 'kFBResolution1080p'):
+            if hasattr(FBCameraResolutionMode, attr):
+                cam.ResolutionMode = getattr(FBCameraResolutionMode, attr)
+                return
+    except: pass
+    # Method 2: Direct width/height properties
+    for wn, hn in (('ResolutionWidth','ResolutionHeight'),
+                   ('PictureWidth','PictureHeight'),
+                   ('AspectW','AspectH')):
+        try:
+            setattr(cam, wn, 1920); setattr(cam, hn, 1080); return
+        except: pass
+    # Method 3: PropertyList fallback
+    for wn, hn in (('ResolutionWidth','ResolutionHeight'),
+                   ('Width','Height')):
+        pw = cam.PropertyList.Find(wn)
+        ph = cam.PropertyList.Find(hn)
+        if pw and ph:
+            try: pw.Data = 1920; ph.Data = 1080; return
+            except: pass
 
 # ── Set FOV ────────────────────────────────────────────────────────────────────
 def _set_fov(val):
@@ -175,16 +320,42 @@ def OnCreateCameraClick(c, e):
     offset = FBModelNull('SaintVCam_Offset')
     offset.Show = True; offset.Size = 15.0
     offset.Parent = target
+    # Reset local T/R to zero → places offset AT the rigid body's world position
+    offset.SetVector(FBVector3d(0, 0, 0), FBModelTransformationType.kModelTranslation, False)
+    offset.SetVector(FBVector3d(0, 0, 0), FBModelTransformationType.kModelRotation, False)
+    FBSystem().Scene.Evaluate()
 
-    # FBCamera → child of offset
+    # FBCamera → child of offset, also zeroed locally
     cam = FBCamera('SaintVCam')
     cam.Parent = offset
+    cam.SetVector(FBVector3d(0, 0, 0), FBModelTransformationType.kModelTranslation, False)
+    cam.SetVector(FBVector3d(0, 0, 0), FBModelTransformationType.kModelRotation, False)
     try: cam.FieldOfView.SetAnimated(True)
     except: pass
     cam.FieldOfView = g_state['fov']
     cam.NearPlane   = 1.0
     cam.FarPlane    = 50000.0
     cam.Show        = True
+
+    # ── Camera display settings ─────────────────────────────────────────────
+    # Safe Frame (action/title safe area overlay)
+    for pn in ('ShowSafeArea', 'SafeAreaDisplay', 'DisplaySafeArea', 'ShowGate'):
+        p = cam.PropertyList.Find(pn)
+        if p:
+            try: p.Data = True; break
+            except: pass
+
+    # Timecode overlay
+    for pn in ('ShowTimeCode', 'TimecodeDisplay', 'DisplayTimecode', 'ShowTimecode'):
+        p = cam.PropertyList.Find(pn)
+        if p:
+            try: p.Data = True; break
+            except: pass
+
+    # Picture format → HD (1920×1080)
+    _set_hd_resolution(cam)
+
+    FBSystem().Scene.Evaluate()
 
     g_state['camera']       = cam
     g_state['offset_null']  = offset
@@ -257,6 +428,13 @@ def OnRecordClick(c, e):
             g_ui['btn_record'].Caption = '⏹ Stop Recording'
         try: cam.FieldOfView.SetAnimated(True)
         except: pass
+        # Enable animation on rigid body T/R so keyframes can be stored
+        model = g_state['target_model']
+        if model:
+            try:
+                model.Translation.SetAnimated(True)
+                model.Rotation.SetAnimated(True)
+            except: pass
         try:
             take_name = 'VCam_Take_' + time.strftime('%Y%m%d_%H%M%S')
             new_take  = FBTake(take_name)
@@ -285,12 +463,38 @@ def OnRecordClick(c, e):
         except Exception as ex: print('VCam StopRecord:', ex)
         _update_status('Recording stopped.')
 
-# ── Snapshot ────────────────────────────────────────────────────────────────────
+# ── Snapshot ─────────────────────────────────────────────────────────────────
 def OnBrowseSnapClick(c, e):
     popup = FBFolderPopup()
     popup.Caption = 'Select Snapshot Folder'
     if popup.Execute() and 'edit_snap_path' in g_ui:
         g_ui['edit_snap_path'].Text = popup.Path
+
+def _create_shot_marker(shot_num, ts, filename, pos, rot, fov):
+    """Create a Hard Cross scene marker at camera world position with shot metadata."""
+    name = 'VCam_Shot_{:03d}'.format(shot_num)
+    marker = FBModelMarker(name)
+    marker.Show = True
+    marker.Size = 20.0
+    try: marker.Look = FBMarkerLook.kFBMarkerLookHardCross
+    except: pass
+    # Place at camera world position/rotation
+    marker.SetVector(FBVector3d(pos[0], pos[1], pos[2]),
+                     FBModelTransformationType.kModelTranslation, True)
+    marker.SetVector(FBVector3d(rot[0], rot[1], rot[2]),
+                     FBModelTransformationType.kModelRotation, True)
+    FBSystem().Scene.Evaluate()
+    # Add user properties for shot metadata
+    try:
+        p_fov = marker.PropertyCreate('FOV_deg',   FBPropertyType.kFBPT_double, 'Number', False, True, None)
+        p_ts  = marker.PropertyCreate('Timestamp', FBPropertyType.kFBPT_charptr,'String', False, True, None)
+        p_fn  = marker.PropertyCreate('Filename',  FBPropertyType.kFBPT_charptr,'String', False, True, None)
+        if p_fov: p_fov.Data = float(fov)
+        if p_ts:  p_ts.Data  = str(ts)
+        if p_fn:  p_fn.Data  = str(filename)
+    except Exception as ex:
+        print('VCam Marker property error:', ex)
+    return marker
 
 def OnSnapshotClick(c, e):
     save_dir = g_ui['edit_snap_path'].Text.strip() if 'edit_snap_path' in g_ui else os.path.expanduser('~')
@@ -299,9 +503,13 @@ def OnSnapshotClick(c, e):
         except:
             FBMessageBox('Error', 'Invalid path:\n' + save_dir, 'OK'); return
 
+    cam = g_state['camera']
     ts  = time.strftime('%Y%m%d_%H%M%S')
-    fp  = os.path.join(save_dir, 'VCam_{}.png'.format(ts)).replace('\\', '/')
-    ps  = (
+    fn  = 'VCam_{}.png'.format(ts)
+    fp  = os.path.join(save_dir, fn).replace('\\', '/')
+
+    # ① Screenshot via PowerShell
+    ps = (
         "Add-Type -AssemblyName System.Windows.Forms;"
         "Add-Type -AssemblyName System.Drawing;"
         "$b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds;"
@@ -312,11 +520,65 @@ def OnSnapshotClick(c, e):
         "$g.Dispose();$bmp.Dispose();"
     ).format(fp)
     subprocess.Popen(['powershell', '-WindowStyle', 'Hidden', '-Command', ps])
-    _update_status('Snapshot saved → VCam_{}.png'.format(ts))
 
-# ── UIIdle (Gamepad polling + FOV keyframing) ──────────────────────────────────
+    # ② Read camera world T / R / FOV
+    pos = [0.0, 0.0, 0.0]
+    rot = [0.0, 0.0, 0.0]
+    fov = g_state['fov']
+    if cam:
+        try:
+            v = FBVector3d()
+            cam.GetVector(v, FBModelTransformationType.kModelTranslation, True)
+            pos = [round(v[0], 3), round(v[1], 3), round(v[2], 3)]
+            cam.GetVector(v, FBModelTransformationType.kModelRotation, True)
+            rot = [round(v[0], 3), round(v[1], 3), round(v[2], 3)]
+            fov = round(float(cam.FieldOfView), 2)
+        except: pass
+
+    # ③ Scene marker at camera position
+    g_state['shot_count'] += 1
+    shot_num = g_state['shot_count']
+    _create_shot_marker(shot_num, ts, fn, pos, rot, fov)
+
+    # ④ Append to JSONL log file
+    log_path = os.path.join(save_dir, 'VCam_Shots.jsonl')
+    record = {
+        'shot':      shot_num,
+        'timestamp': ts,
+        'file':      fn,
+        'pos_cm':    pos,
+        'rot_deg':   rot,
+        'fov_deg':   fov,
+    }
+    try:
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(record, ensure_ascii=False) + '\n')
+    except Exception as ex:
+        print('VCam Log write error:', ex)
+
+    _update_status('Shot {:03d} saved → {} | FOV {:.1f}°'.format(shot_num, fn, fov))
+
+# ── UIIdle (OSC polling + Gamepad + Keyframing during Record) ──────────────────
 def OnUIIdle(c, e):
     global _prev_btn
+
+    # ── OSC polling (always, regardless of gamepad state) ────────────────────
+    _poll_osc()
+
+    # ── Per-frame keyframing during recording ──────────────────────────────
+    if g_state['is_recording']:
+        model = g_state['target_model']
+        if model:
+            try:
+                model.Translation.Key()   # Rigid body world position
+                model.Rotation.Key()      # Rigid body world rotation
+            except: pass
+        cam = g_state['camera']
+        if cam:
+            try: cam.FieldOfView.Key()    # VCam FOV
+            except: pass
+
+    # ── Gamepad polling ────────────────────────────────────────────────────
     if not g_state['gamepad_enabled']: return
     gp = _read_gamepad()
     if not gp: return
@@ -335,8 +597,8 @@ def OnUIIdle(c, e):
 
 # ── UI ─────────────────────────────────────────────────────────────────────────
 def PopulateTool(tool):
-    tool.StartSizeX = 320
-    tool.StartSizeY = 680
+    tool.StartSizeX = 400
+    tool.StartSizeY = 750
 
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft,   '')
     y = FBAddRegionParam(0, FBAttachType.kFBAttachTop,    '')
@@ -361,15 +623,15 @@ def PopulateTool(tool):
         lbl = FBLabel(); lbl.Caption = axis + ':'
         row.Add(lbl, 22)
         for deg in (-90, -10, -1, 1, 10, 90):
-            row.Add(btn('{:+d}'.format(deg), _make_rot_cb(axis, deg)), 44)
+            row.Add(btn('{:+d}'.format(deg), _make_rot_cb(axis, deg)), 52)
         return row
 
     # ── RIGID BODY SOURCE
     lyt_src = FBHBoxLayout()
     g_ui['list_models']  = FBList()
     g_ui['btn_refresh']  = btn('Refresh', OnRefreshClick)
-    lyt_src.Add(g_ui['list_models'],  200)
-    lyt_src.Add(g_ui['btn_refresh'],   78)
+    lyt_src.Add(g_ui['list_models'],  268)
+    lyt_src.Add(g_ui['btn_refresh'],   90)
 
     g_ui['btn_create'] = btn('Create & Attach Camera', OnCreateCameraClick)
 
@@ -377,9 +639,21 @@ def PopulateTool(tool):
     g_ui['btn_set_active'] = btn('Set Active Camera', OnSetActiveClick)
     g_ui['btn_detach']     = btn('Detach', OnDetachClick)
     g_ui['btn_del_vcam']   = btn('Delete VCam', OnDeleteVCamClick)
-    lyt_cam_ctrl.Add(g_ui['btn_set_active'], 140)
-    lyt_cam_ctrl.Add(g_ui['btn_detach'],      78)
-    lyt_cam_ctrl.Add(g_ui['btn_del_vcam'],    82)
+    lyt_cam_ctrl.Add(g_ui['btn_set_active'], 170)
+    lyt_cam_ctrl.Add(g_ui['btn_detach'],      96)
+    lyt_cam_ctrl.Add(g_ui['btn_del_vcam'],    96)
+
+    # ── OSC SOURCE (ZIG SIM Pro)
+    lyt_osc_top = FBHBoxLayout()
+    lbl_osc_p = FBLabel(); lbl_osc_p.Caption = 'Port:'
+    g_ui['edit_osc_port'] = FBEditNumber()
+    g_ui['edit_osc_port'].Min = 1024; g_ui['edit_osc_port'].Max = 65535
+    g_ui['edit_osc_port'].Value = 9007; g_ui['edit_osc_port'].Precision = 0
+    g_ui['btn_osc_toggle'] = btn('▶ Start OSC', OnOSCToggleClick)
+    lyt_osc_top.Add(lbl_osc_p, 38)
+    lyt_osc_top.Add(g_ui['edit_osc_port'], 90)
+    lyt_osc_top.Add(g_ui['btn_osc_toggle'], 240)
+    g_ui['btn_create_osc_rb'] = btn('Create OSC Rigid Body (ZigSim)', OnCreateOSCRigidBodyClick)
 
     # ── MOUNTING OFFSET
     g_ui['btn_reset'] = btn('Reset to +Z (default)', OnResetOffsetClick)
@@ -394,12 +668,12 @@ def PopulateTool(tool):
     g_ui['edit_fov'].Min = FOV_MIN; g_ui['edit_fov'].Max = FOV_MAX
     g_ui['edit_fov'].Value = g_state['fov']; g_ui['edit_fov'].Precision = 1
     g_ui['edit_fov'].OnChange.Add(OnFOVChange)
-    lyt_fov.Add(lbl_fov, 35); lyt_fov.Add(g_ui['edit_fov'], 245)
+    lyt_fov.Add(lbl_fov, 35); lyt_fov.Add(g_ui['edit_fov'], 320)
 
     lyt_zoom = FBHBoxLayout()
-    g_ui['btn_wider']   = btn('◀ Wider',    OnZoomOutClick)
-    g_ui['btn_tighter'] = btn('Tighter ▶',  OnZoomInClick)
-    lyt_zoom.Add(g_ui['btn_wider'],  148); lyt_zoom.Add(g_ui['btn_tighter'], 148)
+    g_ui['btn_wider']   = btn('Zoom Out', OnZoomOutClick)
+    g_ui['btn_tighter'] = btn('Zoom In',  OnZoomInClick)
+    lyt_zoom.Add(g_ui['btn_wider'],  188); lyt_zoom.Add(g_ui['btn_tighter'], 188)
 
     lyt_gp = FBHBoxLayout()
     g_ui['chk_gamepad'] = FBButton()
@@ -412,8 +686,8 @@ def PopulateTool(tool):
     g_ui['edit_gp_idx'].Min = 0; g_ui['edit_gp_idx'].Max = 3
     g_ui['edit_gp_idx'].Value = 0; g_ui['edit_gp_idx'].Precision = 0
     g_ui['edit_gp_idx'].OnChange.Add(OnGPIndexChange)
-    lyt_gp.Add(g_ui['chk_gamepad'], 165)
-    lyt_gp.Add(lbl_gi, 38); lyt_gp.Add(g_ui['edit_gp_idx'], 55)
+    lyt_gp.Add(g_ui['chk_gamepad'], 200)
+    lyt_gp.Add(lbl_gi, 45); lyt_gp.Add(g_ui['edit_gp_idx'], 65)
 
     # ── CAPTURE
     lyt_snap_path = FBHBoxLayout()
@@ -422,14 +696,14 @@ def PopulateTool(tool):
     g_ui['edit_snap_path'].Text = os.path.join(os.path.expanduser('~'), 'Desktop')
     g_ui['btn_browse_snap'] = btn('Browse', OnBrowseSnapClick)
     lyt_snap_path.Add(lbl_sp, 38)
-    lyt_snap_path.Add(g_ui['edit_snap_path'], 175)
-    lyt_snap_path.Add(g_ui['btn_browse_snap'], 80)
+    lyt_snap_path.Add(g_ui['edit_snap_path'], 230)
+    lyt_snap_path.Add(g_ui['btn_browse_snap'], 90)
 
     lyt_capture = FBHBoxLayout()
     g_ui['btn_record']   = btn('🔴 Record',    OnRecordClick)
     g_ui['btn_snapshot'] = btn('📷 Snapshot',  OnSnapshotClick)
-    lyt_capture.Add(g_ui['btn_record'],   148)
-    lyt_capture.Add(g_ui['btn_snapshot'], 148)
+    lyt_capture.Add(g_ui['btn_record'],   188)
+    lyt_capture.Add(g_ui['btn_snapshot'], 188)
 
     # ── Status
     g_ui['lbl_status'] = FBLabel()
@@ -437,11 +711,14 @@ def PopulateTool(tool):
 
     # ── Assemble layout
     lay = g_ui['main_layout']
-    lay.Add(hdr('RIGID BODY SOURCE'),     25)
-    lay.Add(lyt_src,                      32)
-    lay.Add(g_ui['btn_create'],           35)
-    lay.Add(lyt_cam_ctrl,                 35)
-    lay.Add(hdr('MOUNTING OFFSET'),       25)
+    lay.Add(hdr('RIGID BODY SOURCE'),          25)
+    lay.Add(lyt_src,                           32)
+    lay.Add(g_ui['btn_create'],                35)
+    lay.Add(lyt_cam_ctrl,                      35)
+    lay.Add(hdr('OSC SOURCE (ZIG SIM Pro)'),   25)
+    lay.Add(lyt_osc_top,                        35)
+    lay.Add(g_ui['btn_create_osc_rb'],          35)
+    lay.Add(hdr('MOUNTING OFFSET'),             25)
     lay.Add(g_ui['btn_reset'],            30)
     lay.Add(g_ui['rot_x'],                30)
     lay.Add(g_ui['rot_y'],                30)
