@@ -32,6 +32,17 @@ from ctypes import wintypes
 from pyfbsdk import *
 from pyfbsdk_additions import *
 
+# ── OpenVR (optional) ─────────────────────────────────────────────────────────
+_OVR_OK = False
+try:
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+    if _script_dir not in sys.path:
+        sys.path.insert(0, _script_dir)
+    import openvr
+    _OVR_OK = True
+except Exception:
+    pass
+
 # ── State ─────────────────────────────────────────────────────────────────────
 if hasattr(sys, 'vcam_gen_state') and sys.vcam_gen_state:
     try: FBSystem().OnUIIdle.Remove(sys.vcam_gen_idle_func)
@@ -59,8 +70,11 @@ sys.vcam_gen_state = {
     'osc_cache':       {},
     'osc_prop_cache':  {},
     # ARKit axis direction: [Tx, Ty, Tz, Rx, Ry, Rz] each +1 or -1
-    # Defaults encode the ARKit→MB coordinate conversion
     'osc_flip':        [1, 1, -1, 1, -1, -1],
+    # OpenVR
+    'ovr_system':      None,
+    'ovr_listening':   False,
+    'ovr_device':      0,       # tracked device index (0 = HMD)
 }
 g_state = sys.vcam_gen_state
 g_ui    = {}
@@ -273,6 +287,60 @@ def _disconnect_osc():
 def OnOSCToggleClick(c, e):
     if g_state['osc_listening']: _disconnect_osc()
     else: _connect_osc()
+
+# ── OpenVR Source ──────────────────────────────────────────────────────────────
+def _mat34_to_pose(mat):
+    """Extract (tx, ty, tz, rx, ry, rz) in cm/deg from OpenVR HmdMatrix34_t."""
+    m = mat.m
+    tx = m[0][3] * 100.0
+    ty = m[1][3] * 100.0
+    tz = m[2][3] * 100.0  # sign handled by osc_flip[2] default=-1
+    # Euler from rotation matrix (ZXY decomposition)
+    sy = math.sqrt(m[0][0]**2 + m[1][0]**2)
+    if sy > 1e-6:
+        rx = math.degrees(math.atan2( m[2][1], m[2][2]))
+        ry = math.degrees(math.atan2(-m[2][0], sy))
+        rz = math.degrees(math.atan2( m[1][0], m[0][0]))
+    else:
+        rx = math.degrees(math.atan2(-m[1][2], m[1][1]))
+        ry = math.degrees(math.atan2(-m[2][0], sy))
+        rz = 0.0
+    return tx, ty, tz, rx, ry, rz
+
+def _connect_openvr():
+    if not _OVR_OK:
+        FBMessageBox('Error',
+            'openvr module not found.\nMake sure the openvr folder is in SaintMobu_Tools.', 'OK')
+        return
+    try:
+        vr = openvr.init(openvr.VRApplication_Background)
+        g_state['ovr_system']    = vr
+        g_state['ovr_listening'] = True
+        # Register idle if not already
+        FBSystem().OnUIIdle.Remove(OnUIIdle)
+        FBSystem().OnUIIdle.Add(OnUIIdle)
+        sys.vcam_gen_idle_func = OnUIIdle
+        if 'btn_ovr_toggle' in g_ui:
+            g_ui['btn_ovr_toggle'].Caption = 'Disconnect OpenVR'
+        _update_status('OpenVR connected. SteamVR must be running.')
+    except Exception as ex:
+        FBMessageBox('Error', 'OpenVR init failed:\n' + str(ex), 'OK')
+
+def _disconnect_openvr():
+    try: openvr.shutdown()
+    except: pass
+    g_state['ovr_system']    = None
+    g_state['ovr_listening'] = False
+    if 'btn_ovr_toggle' in g_ui:
+        g_ui['btn_ovr_toggle'].Caption = 'Connect OpenVR'
+    _update_status('OpenVR disconnected.')
+
+def OnOVRToggleClick(c, e):
+    if g_state['ovr_listening']: _disconnect_openvr()
+    else: _connect_openvr()
+
+def OnOVRDeviceChange(c, e):
+    g_state['ovr_device'] = int(c.Value)
 
 def _clean_user_props(model):
     """Remove all user-created custom properties from a model (cleans up old OSC residue)."""
@@ -849,7 +917,8 @@ def OnUIIdle(c, e):
                 except: pass
 
     # ── Fallback bridge: direct RigidBody drive when Constraint not connected ──
-    if g_state['osc_listening'] and not g_state.get('osc_con_ok'):
+    any_source = g_state['osc_listening'] or g_state['ovr_listening']
+    if any_source and not g_state.get('osc_con_ok'):
         rb = g_state.get('osc_rigid_body')
         if rb:
             try:
@@ -860,6 +929,41 @@ def OnUIIdle(c, e):
                 if tx is not None or rx is not None:
                     FBSystem().Scene.Evaluate()
             except: pass
+
+    # ── OpenVR polling (drives same T/R pipeline as OSC) ──────────────────
+    if g_state['ovr_listening'] and g_state.get('ovr_system'):
+        try:
+            vr     = g_state['ovr_system']
+            dev    = int(g_state.get('ovr_device', 0))
+            flip   = g_state.get('osc_flip', [1,1,-1,1,-1,-1])
+            poses  = (openvr.TrackedDevicePose_t * openvr.k_unMaxTrackedDeviceCount)()
+            vr.getDeviceToAbsoluteTrackingPose(
+                openvr.TrackingUniverseStanding, 0, poses)
+            pose = poses[dev]
+            if pose.bPoseIsValid:
+                rtx, rty, rtz, rrx, rry, rrz = _mat34_to_pose(
+                    pose.mDeviceToAbsoluteTracking)
+                tx = rtx * flip[0]
+                ty = rty * flip[1]
+                tz = rtz * flip[2]
+                rx = rrx * flip[3]
+                ry = rry * flip[4]
+                rz = rrz * flip[5]
+                osc_null = g_state.get('osc_data_null')
+                if osc_null:
+                    try: osc_null.SetVector(FBVector3d(tx,ty,tz), FBModelTransformationType.kModelTranslation, True)
+                    except: pass
+                    try: osc_null.SetVector(FBVector3d(rx,ry,rz), FBModelTransformationType.kModelRotation, True)
+                    except: pass
+                if not g_state.get('osc_con_ok'):
+                    rb2 = g_state.get('osc_rigid_body')
+                    if rb2:
+                        try:
+                            rb2.SetVector(FBVector3d(tx,ty,tz), FBModelTransformationType.kModelTranslation, True)
+                            rb2.SetVector(FBVector3d(rx,ry,rz), FBModelTransformationType.kModelRotation, True)
+                            FBSystem().Scene.Evaluate()
+                        except: pass
+        except: pass
 
     # ── Per-frame keyframing during recording ──────────────────────────────
     if g_state['is_recording']:
@@ -894,7 +998,7 @@ def OnUIIdle(c, e):
 # ── UI ─────────────────────────────────────────────────────────────────────────
 def PopulateTool(tool):
     tool.StartSizeX = 400
-    tool.StartSizeY = 900
+    tool.StartSizeY = 1000
 
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft,   '')
     y = FBAddRegionParam(0, FBAttachType.kFBAttachTop,    '')
@@ -957,6 +1061,19 @@ def PopulateTool(tool):
     lyt_osc_top.Add(g_ui['btn_osc_toggle'], 240)
     g_ui['btn_create_osc_rb'] = btn('Create OSC Source & RigidBody', OnCreateOSCRigidBodyClick)
     g_ui['btn_reset_osc_data'] = btn('🔄 Reset OSC Data Null', OnResetOSCDataClick)
+
+    # ── OPENVR SOURCE
+    _ovr_label = 'Connect OpenVR' if _OVR_OK else 'OpenVR: module not found'
+    lyt_ovr = FBHBoxLayout()
+    lbl_ovr_dev = FBLabel(); lbl_ovr_dev.Caption = 'Device:'
+    g_ui['edit_ovr_dev'] = FBEditNumber()
+    g_ui['edit_ovr_dev'].Min = 0; g_ui['edit_ovr_dev'].Max = 15
+    g_ui['edit_ovr_dev'].Value = 0; g_ui['edit_ovr_dev'].Precision = 0
+    g_ui['edit_ovr_dev'].OnChange.Add(OnOVRDeviceChange)
+    g_ui['btn_ovr_toggle'] = btn(_ovr_label, OnOVRToggleClick)
+    lyt_ovr.Add(lbl_ovr_dev, 52)
+    lyt_ovr.Add(g_ui['edit_ovr_dev'], 55)
+    lyt_ovr.Add(g_ui['btn_ovr_toggle'], 263)
 
     # ── MOUNTING OFFSET
     g_ui['btn_reset'] = btn('Reset to +Z (default)', OnResetOffsetClick)
@@ -1051,6 +1168,8 @@ def PopulateTool(tool):
     lay.Add(lyt_osc_top,                        35)
     lay.Add(g_ui['btn_create_osc_rb'],          35)
     lay.Add(g_ui['btn_reset_osc_data'],         35)
+    lay.Add(hdr('OPENVR SOURCE'),               25)
+    lay.Add(lyt_ovr,                            35)
     lay.Add(hdr('RIGID BODY SOURCE'),           25)
     lay.Add(lyt_src,                            32)
     lay.Add(g_ui['btn_create'],                 35)
