@@ -53,6 +53,14 @@ sys.vcam_gen_state = {
     'osc_socket':      None,
     'osc_listening':   False,
     'osc_rigid_body':  None,
+    'osc_data_null':   None,
+    'osc_constraint':  None,
+    'osc_con_ok':      False,
+    'osc_cache':       {},
+    'osc_prop_cache':  {},
+    # ARKit axis direction: [Tx, Ty, Tz, Rx, Ry, Rz] each +1 or -1
+    # Defaults encode the ARKit→MB coordinate conversion
+    'osc_flip':        [1, 1, -1, 1, -1, -1],
 }
 g_state = sys.vcam_gen_state
 g_ui    = {}
@@ -90,24 +98,94 @@ def _read_gamepad():
     except: pass
     return None
 
-# ── ZIG SIM Pro OSC Source ─────────────────────────────────────────────────────
-def _osc_str(data, off):
-    end = data.index(b'\x00', off)
-    s = data[off:end].decode('utf-8', errors='ignore')
-    return s, (end + 4) & ~3
-
+# ── OSC Source (Generic – MobuOSC_Manager style) ──────────────────────────────
 def _osc_parse(data):
+    """Proven OSC parser (ported from MobuOSC_Manager). Returns (address, args)."""
     try:
-        addr, off = _osc_str(data, 0)
-        tag,  off = _osc_str(data, off)
-        if not tag.startswith(','): return None
+        addr_end = data.find(b'\x00')
+        if addr_end == -1: return None, []
+        address = data[:addr_end].decode('utf-8')
+
+        type_start = (addr_end + 4) & ~0x03
+        if type_start >= len(data) or data[type_start] != ord(','):
+            return address, []
+
+        type_end = data.find(b'\x00', type_start)
+        if type_end == -1: return address, []
+        type_tags = data[type_start+1:type_end].decode('utf-8')
+
+        arg_start = (type_end + 4) & ~0x03
         args = []
-        for c in tag[1:]:
-            if   c == 'f': args.append(struct.unpack('>f', data[off:off+4])[0]); off += 4
-            elif c == 'i': args.append(struct.unpack('>i', data[off:off+4])[0]); off += 4
-            elif c == 's': s, off = _osc_str(data, off); args.append(s)
-        return addr, args
-    except: return None
+        offset = arg_start
+        for tag in type_tags:
+            if offset >= len(data): break
+            if tag == 'f':
+                args.append(struct.unpack('>f', data[offset:offset+4])[0]); offset += 4
+            elif tag == 'i':
+                args.append(struct.unpack('>i', data[offset:offset+4])[0]); offset += 4
+            elif tag == 's':
+                s_end = data.find(b'\x00', offset)
+                if s_end == -1: break
+                args.append(data[offset:s_end].decode('utf-8'))
+                offset = (s_end + 4) & ~0x03
+        return address, args
+    except:
+        return None, []
+
+def _osc_process_message(address, args):
+    """Store one OSC message into osc_cache (exact MobuOSC_Manager logic)."""
+    if not address: return
+    cache = g_state['osc_cache']
+    safe  = address.strip('/').replace('/', '_')
+    # String-keyed variant (some devices use 'key value' style)
+    if len(args) >= 2 and isinstance(args[0], str):
+        key = args[0]
+        for i in range(1, len(args)):
+            if isinstance(args[i], (int, float)):
+                cache['{}_{}'.format(key, i)] = float(args[i])
+        return
+    # Normal float/int args
+    if len(args) == 1:
+        if isinstance(args[0], (int, float)):
+            cache[safe] = float(args[0])
+    else:
+        for i, val in enumerate(args):
+            if isinstance(val, (int, float)):
+                cache['{}_{}'.format(safe, i)] = float(val)
+
+def _poll_osc():
+    """Non-blocking drain of OSC UDP packets (MobuOSC_Manager approach)."""
+    sock = g_state.get('osc_socket')
+    if not sock: return
+    packets = 0
+    last_size = 0
+    while packets < 2000:
+        try:
+            data, _ = sock.recvfrom(65536)
+            last_size = len(data)
+            if data.startswith(b'#bundle'):
+                offset = 16
+                while offset < len(data):
+                    try:
+                        size = struct.unpack('>i', data[offset:offset+4])[0]
+                        offset += 4
+                        _osc_process_message(*_osc_parse(data[offset:offset+size]))
+                        offset += size
+                    except: break
+            else:
+                _osc_process_message(*_osc_parse(data))
+            packets += 1
+        except BlockingIOError: break
+        except socket.error as e:
+            if e.errno == 10035: break  # Windows WSAEWOULDBLOCK
+            break
+        except: break
+    if last_size > 0:
+        now = time.time()
+        if now - g_state.get('osc_last_ui', 0) > 0.2:
+            g_state['osc_last_ui'] = now
+            g_state['osc_pkt_count'] = g_state.get('osc_pkt_count', 0) + packets
+            _update_status('OSC ✔ Receiving  (pkts: {})'.format(g_state['osc_pkt_count']))
 
 def _quat_to_euler(qx, qy, qz, qw):
     """Quaternion → XYZ Euler degrees."""
@@ -117,48 +195,71 @@ def _quat_to_euler(qx, qy, qz, qw):
     rz = math.degrees(math.atan2(2*(qw*qz+qx*qy), 1-2*(qy*qy+qz*qz)))
     return rx, ry, rz
 
-def _apply_zigsim(addr, args):
-    """Apply ZIG SIM ARKit OSC data to the OSC Rigid Body (ZigSim_RigidBody)."""
-    rb = g_state.get('osc_rigid_body')
-    if not rb: return
-    # Position: /zigsim/<uuid>/arposition  (x, y, z) metres → MB centimetres
-    if addr.endswith('/arposition') and len(args) >= 3:
-        rb.SetVector(FBVector3d(args[0]*100, args[1]*100, args[2]*100),
-                     FBModelTransformationType.kModelTranslation, True)
-        FBSystem().Scene.Evaluate()
-    # Rotation: /zigsim/<uuid>/arqt or /attitude  (x, y, z, w) quaternion
-    elif addr.endswith(('/arqt', '/attitude')) and len(args) >= 4:
-        rx, ry, rz = _quat_to_euler(args[0], args[1], args[2], args[3])
-        rb.SetVector(FBVector3d(rx, ry, rz),
-                     FBModelTransformationType.kModelRotation, True)
-        FBSystem().Scene.Evaluate()
+def _set_osc_prop(null, name, val):
+    """Write to a named property on the OSC data null."""
+    p = null.PropertyList.Find(name)
+    if p:
+        try: p.Data = float(val)
+        except: pass
 
-def _poll_osc():
-    """Non-blocking drain of incoming OSC UDP packets."""
-    sock = g_state.get('osc_socket')
-    if not sock: return
-    try:
-        while True:
-            data, _ = sock.recvfrom(4096)
-            pkt = _osc_parse(data)
-            if pkt: _apply_zigsim(*pkt)
-    except: pass
+def _interpret_osc_cache():
+    """Read osc_cache → find ARKit channels → write to VCam_OSC_Data Tx/Ty/Tz/Rx/Ry/Rz."""
+    null = g_state.get('osc_data_null')
+    if not null: return
+    cache = g_state.get('osc_cache', {})
+    if not cache: return
 
-def _start_osc():
-    port = int(g_ui['edit_osc_port'].Value) if 'edit_osc_port' in g_ui else 9007
+    for key in list(cache.keys()):
+        if 'arkitposition_0' in key.lower():
+            base = key[:-1]  # strip trailing '0'
+            _set_osc_prop(null, 'Tx',  cache.get(base + '0', 0) * 100)
+            _set_osc_prop(null, 'Ty',  cache.get(base + '1', 0) * 100)
+            _set_osc_prop(null, 'Tz', -cache.get(base + '2', 0) * 100)
+            break
+
+    for key in list(cache.keys()):
+        if 'arkitrotation_0' in key.lower():
+            base = key[:-1]
+            qx = cache.get(base + '0', 0)
+            qy = cache.get(base + '1', 0)
+            qz = cache.get(base + '2', 0)
+            qw = cache.get(base + '3', 1)
+            rx, ry, rz = _quat_to_euler(qx, -qy, -qz, qw)
+            _set_osc_prop(null, 'Rx', rx)
+            _set_osc_prop(null, 'Ry', ry)
+            _set_osc_prop(null, 'Rz', rz)
+            break
+
+
+
+
+
+
+def _connect_osc():
+    """Connect OSC receiver (mirrors MobuOSC_Manager OnConnectClick)."""
+    ip   = g_ui['edit_osc_ip'].Text.strip()  if 'edit_osc_ip'   in g_ui else '0.0.0.0'
+    port = int(g_ui['edit_osc_port'].Value)  if 'edit_osc_port' in g_ui else 9007
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.bind(('0.0.0.0', port))
+        s.bind((ip, port))
         s.setblocking(False)
         g_state['osc_socket']    = s
         g_state['osc_listening'] = True
+        g_state['osc_cache']     = {}   # flush stale data
+        g_state['osc_prop_cache']= {}   # flush property cache
+        # Register idle loop (same as MobuOSC_Manager – must be done on connect)
+        try: FBSystem().OnUIIdle.Remove(OnUIIdle)
+        except: pass
+        FBSystem().OnUIIdle.Add(OnUIIdle)
+        sys.vcam_gen_idle_func = OnUIIdle
         if 'btn_osc_toggle' in g_ui:
-            g_ui['btn_osc_toggle'].Caption = '⏹ Stop OSC'
-        _update_status('OSC listening on :{}'.format(port))
+            g_ui['btn_osc_toggle'].Caption = 'Disconnect'
+        _update_status('Connected: listening on {}:{}'.format(ip, port))
     except Exception as ex:
-        FBMessageBox('Error', 'Cannot bind port {}:\n{}'.format(port, str(ex)), 'OK')
+        FBMessageBox('Error', 'Cannot bind {}:{}\n{}'.format(ip, port, str(ex)), 'OK')
 
-def _stop_osc():
+def _disconnect_osc():
+    """Disconnect OSC receiver."""
     s = g_state.get('osc_socket')
     if s:
         try: s.close()
@@ -166,35 +267,157 @@ def _stop_osc():
     g_state['osc_socket']    = None
     g_state['osc_listening'] = False
     if 'btn_osc_toggle' in g_ui:
-        g_ui['btn_osc_toggle'].Caption = '▶ Start OSC'
-    _update_status('OSC stopped.')
+        g_ui['btn_osc_toggle'].Caption = 'Connect'
+    _update_status('OSC Disconnected.')
 
 def OnOSCToggleClick(c, e):
-    if g_state['osc_listening']: _stop_osc()
-    else: _start_osc()
+    if g_state['osc_listening']: _disconnect_osc()
+    else: _connect_osc()
+
+def _clean_user_props(model):
+    """Remove all user-created custom properties from a model (cleans up old OSC residue)."""
+    if not model: return 0
+    removed = 0
+    try:
+        to_remove = []
+        for i in range(len(model.PropertyList)):
+            try:
+                p = model.PropertyList[i]
+                if p.IsUserProperty():
+                    to_remove.append(p)
+            except: pass
+        for p in to_remove:
+            try:
+                model.PropertyList.Remove(p)
+                removed += 1
+            except: pass
+    except: pass
+    return removed
+
+def _ensure_osc_data_null():
+    """Get or create VCam_OSC_Data null (plain, no pre-created custom props)."""
+    existing = g_state.get('osc_data_null')
+    if existing:
+        try:
+            _ = existing.Name   # raises if deleted from scene
+            return existing
+        except:
+            g_state['osc_data_null']  = None
+            g_state['osc_prop_cache'] = {}
+    # Search scene for existing null
+    for comp in FBSystem().Scene.Components:
+        if isinstance(comp, FBModel) and comp.Name == 'VCam_OSC_Data':
+            _clean_user_props(comp)   # purge any stale OSC properties
+            g_state['osc_data_null']  = comp
+            g_state['osc_prop_cache'] = {}
+            return comp
+    # Create fresh null
+    null = FBModelNull('VCam_OSC_Data')
+    null.Show = True
+    null.Size = 5.0
+    g_state['osc_data_null'] = null
+    return null
+
+def OnResetOSCDataClick(c, e):
+    """Delete existing VCam_OSC_Data and force recreate on next poll."""
+    old = g_state.get('osc_data_null')
+    if old:
+        try: old.FBDelete()
+        except: pass
+    g_state['osc_data_null']  = None
+    g_state['osc_prop_cache'] = {}
+    # Recreate immediately so constraint can be rebuilt
+    null = _ensure_osc_data_null()
+    # Rebuild constraint if rigid body exists
+    rb = g_state.get('osc_rigid_body')
+    old_con = g_state.get('osc_constraint')
+    if old_con:
+        try: old_con.FBDelete()
+        except: pass
+    g_state['osc_constraint'] = None
+    g_state['osc_con_ok']     = False
+    if rb and null:
+        _create_osc_constraint(null, rb)
+    _update_status('VCam_OSC_Data reset. Old properties cleared.')
+
+
+def _create_osc_constraint(osc_data, rb):
+    """Relation Constraint: VCam_OSC_Data.Translation/Rotation → VCam_RigidBody T/R.
+    Vector-to-vector connection (cleaner, no Tx/Ty/Tz intermediaries).
+    """
+    g_state['osc_con_ok'] = False
+    try:
+        con = FBConstraintRelation('VCam_OSC_Link')
+        src_box  = con.SetAsSource(osc_data)
+        trgt_box = con.ConstrainObject(rb)
+        con.SetBoxPosition(src_box,  50, 80)
+        con.SetBoxPosition(trgt_box, 400, 80)
+
+        src_out = src_box.AnimationNodeOutGet()
+        trgt_in = trgt_box.AnimationNodeInGet()
+
+        def find_node(parent, name):
+            if not parent: return None
+            for n in parent.Nodes:
+                if n.Name.lower() == name.lower(): return n
+            return None
+
+        connected = 0
+        for node_name in ('Translation', 'Rotation'):
+            src_n  = find_node(src_out, node_name)
+            trgt_n = find_node(trgt_in,  node_name)
+            if src_n and trgt_n:
+                try:
+                    FBConnect(src_n, trgt_n)
+                    connected += 1
+                    print('VCam: Constraint {} → {} OK'.format(node_name, node_name))
+                except Exception as ex:
+                    print('VCam: Constraint {} FAILED: {}'.format(node_name, ex))
+
+        con.Active = True
+        g_state['osc_constraint'] = con
+        g_state['osc_con_ok']     = (connected >= 2)
+        print('VCam: Constraint result: {}/2 connections. Bridge fallback: {}'.format(
+              connected, 'OFF' if connected >= 2 else 'ON'))
+        return con
+    except Exception as ex:
+        print('VCam: Constraint creation failed:', ex)
+        g_state['osc_constraint'] = None
+        g_state['osc_con_ok']     = False
+        return None
 
 def OnCreateOSCRigidBodyClick(c, e):
-    """Create a scene Null driven by ZIG SIM OSC data."""
-    # Delete existing one if present
+    """Create VCam_OSC_Data + VCam_RigidBody + Relation Constraint."""
+    # Cleanup old rigid body
     existing = g_state.get('osc_rigid_body')
     if existing:
         try: existing.FBDelete()
         except: pass
-    rb = FBModelNull('ZigSim_RigidBody')
+    old_con = g_state.get('osc_constraint')
+    if old_con:
+        try: old_con.FBDelete()
+        except: pass
+    g_state['osc_constraint'] = None
+
+    osc_data = _ensure_osc_data_null()
+
+    rb = FBModelNull('VCam_RigidBody')
     rb.Show   = True
     rb.Size   = 30.0
     rb.Selected = True
     g_state['osc_rigid_body'] = rb
     FBSystem().Scene.Evaluate()
-    # Auto-refresh model dropdown and select new rigid body
+
+    _create_osc_constraint(osc_data, rb)
+
+    # Refresh dropdown and auto-select VCam_RigidBody
     OnRefreshClick(None, None)
     lst = g_ui.get('list_models')
     if lst:
         for i in range(len(lst.Items)):
-            if lst.Items[i] == 'ZigSim_RigidBody':
-                lst.ItemIndex = i
-                break
-    _update_status('ZigSim_RigidBody created. Start OSC then Create & Attach Camera.')
+            if 'VCam_RigidBody' in lst.Items[i]:
+                lst.ItemIndex = i; break
+    _update_status('VCam_OSC_Data + VCam_RigidBody created. Start OSC, then Create & Attach Camera.')
 
 # ── FOV constants ──────────────────────────────────────────────────────────────
 FOV_MIN   = 5.0
@@ -215,7 +438,8 @@ def _find_model(long_name):
     return None
 
 def _scan_models():
-    skip = {'SaintVCam', 'SaintVCam_Offset', 'Camera Switcher', 'CameraSwitcher', 'CameraInterest'}
+    skip = {'SaintVCam', 'SaintVCam_Offset', 'VCam_OSC_Data',
+            'Camera Switcher', 'CameraSwitcher', 'CameraInterest'}
     seen, out = set(), []
     for comp in FBSystem().Scene.Components:
         if isinstance(comp, (FBCamera, FBLight)): continue
@@ -320,9 +544,9 @@ def OnCreateCameraClick(c, e):
     offset = FBModelNull('SaintVCam_Offset')
     offset.Show = True; offset.Size = 15.0
     offset.Parent = target
-    # Reset local T/R to zero → places offset AT the rigid body's world position
-    offset.SetVector(FBVector3d(0, 0, 0), FBModelTransformationType.kModelTranslation, False)
-    offset.SetVector(FBVector3d(0, 0, 0), FBModelTransformationType.kModelRotation, False)
+    # Y=-90 rotates the camera's natural +X facing to world +Z
+    offset.SetVector(FBVector3d(0, 0, 0),  FBModelTransformationType.kModelTranslation, False)
+    offset.SetVector(FBVector3d(0, -90, 0), FBModelTransformationType.kModelRotation,    False)
     FBSystem().Scene.Evaluate()
 
     # FBCamera → child of offset, also zeroed locally
@@ -373,10 +597,14 @@ def OnSetActiveClick(c, e):
     if not cam:
         FBMessageBox('Error', 'No VCam created yet.', 'OK'); return
     try:
-        FBSystem().Scene.Renderer.CurrentCamera = cam
-        _update_status('SaintVCam is now the active camera.')
+        renderer = FBSystem().Scene.Renderer
+        # Set VCam only in the first viewport pane (pane 0)
+        try: renderer.SetCameraInPane(cam, 0)
+        except: pass
+        _update_status('SaintVCam is active in pane 0.')
     except Exception as ex:
         _update_status('Error: ' + str(ex))
+
 
 def OnDetachClick(c, e):
     null = g_state['offset_null']
@@ -398,9 +626,10 @@ def OnDeleteVCamClick(c, e):
 def OnResetOffsetClick(c, e):
     null = g_state['offset_null']
     if null:
-        null.SetVector(FBVector3d(0, 0, 0), FBModelTransformationType.kModelRotation, False)
+        # Y=-90 → camera faces world +Z (FBCamera natural look = +X, so -90° → +Z)
+        null.SetVector(FBVector3d(0, -90, 0), FBModelTransformationType.kModelRotation, False)
         FBSystem().Scene.Evaluate()
-        _update_status('Mounting offset reset to +Z.')
+        _update_status('Mounting offset reset to face +Z.')
     else:
         FBMessageBox('Error', 'No VCam created yet.', 'OK')
 
@@ -562,8 +791,75 @@ def OnSnapshotClick(c, e):
 def OnUIIdle(c, e):
     global _prev_btn
 
-    # ── OSC polling (always, regardless of gamepad state) ────────────────────
-    _poll_osc()
+    # ── OSC polling ────────────────────────────────────────────────────────────
+    if g_state['osc_listening'] and g_state.get('osc_socket'):
+        _poll_osc()
+        # Validate null (clear stale ref if user deleted it from scene)
+        osc_null = g_state.get('osc_data_null')
+        if osc_null:
+            try: _ = osc_null.Name
+            except:
+                g_state['osc_data_null'] = None
+                osc_null = None
+        # NOTE: no auto-create – only "Create OSC Source & RigidBody" button creates it
+
+        # Write all received OSC channels as animatable properties on VCam_OSC_Data
+        # (so users can monitor incoming data; Reset button cleans stale props via FBDelete)
+        if osc_null:
+            prop_cache = g_state.setdefault('osc_prop_cache', {})
+            for key, val in list(g_state['osc_cache'].items()):
+                prop = prop_cache.get(key)
+                if not prop:
+                    prop = osc_null.PropertyList.Find(key)
+                    if not prop:
+                        prop = osc_null.PropertyCreate(key, FBPropertyType.kFBPT_double, 'Number', True, True, None)
+                        if prop: prop.SetAnimated(True)
+                    if prop: prop_cache[key] = prop
+                if prop:
+                    try: prop.Data = float(val)
+                    except: pass
+
+        # ARKit interpretation → drive VCam_OSC_Data.Translation/Rotation
+        # raw OSC channels stay in osc_cache (memory only, not written as scene props)
+        cache = g_state.get('osc_cache', {})
+        tx = ty = tz = rx = ry = rz = None
+        for k in cache:
+            kl = k.lower()
+            if tx is None and 'arkitposition_0' in kl:
+                base = k[:-1]
+                flip = g_state.get('osc_flip', [1,1,-1,1,-1,-1])
+                tx = cache.get(base+'0', 0) * 100 * flip[0]
+                ty = cache.get(base+'1', 0) * 100 * flip[1]
+                tz = cache.get(base+'2', 0) * 100 * flip[2]
+            if rx is None and 'arkitrotation_0' in kl:
+                base = k[:-1]
+                flip = g_state.get('osc_flip', [1,1,-1,1,-1,-1])
+                qx = cache.get(base+'0', 0)
+                qy = cache.get(base+'1', 0)
+                qz = cache.get(base+'2', 0)
+                qw = cache.get(base+'3', 1)
+                rx, ry, rz = _quat_to_euler(qx, qy, qz, qw)   # pure conversion
+                rx *= flip[3]; ry *= flip[4]; rz *= flip[5]     # apply flip state
+        if osc_null:
+            if tx is not None:
+                try: osc_null.SetVector(FBVector3d(tx, ty, tz), FBModelTransformationType.kModelTranslation, True)
+                except: pass
+            if rx is not None:
+                try: osc_null.SetVector(FBVector3d(rx, ry, rz), FBModelTransformationType.kModelRotation, True)
+                except: pass
+
+    # ── Fallback bridge: direct RigidBody drive when Constraint not connected ──
+    if g_state['osc_listening'] and not g_state.get('osc_con_ok'):
+        rb = g_state.get('osc_rigid_body')
+        if rb:
+            try:
+                if tx is not None:
+                    rb.SetVector(FBVector3d(tx, ty, tz), FBModelTransformationType.kModelTranslation, True)
+                if rx is not None:
+                    rb.SetVector(FBVector3d(rx, ry, rz), FBModelTransformationType.kModelRotation, True)
+                if tx is not None or rx is not None:
+                    FBSystem().Scene.Evaluate()
+            except: pass
 
     # ── Per-frame keyframing during recording ──────────────────────────────
     if g_state['is_recording']:
@@ -598,7 +894,7 @@ def OnUIIdle(c, e):
 # ── UI ─────────────────────────────────────────────────────────────────────────
 def PopulateTool(tool):
     tool.StartSizeX = 400
-    tool.StartSizeY = 750
+    tool.StartSizeY = 900
 
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft,   '')
     y = FBAddRegionParam(0, FBAttachType.kFBAttachTop,    '')
@@ -622,8 +918,8 @@ def PopulateTool(tool):
         row = FBHBoxLayout()
         lbl = FBLabel(); lbl.Caption = axis + ':'
         row.Add(lbl, 22)
-        for deg in (-90, -10, -1, 1, 10, 90):
-            row.Add(btn('{:+d}'.format(deg), _make_rot_cb(axis, deg)), 52)
+        for deg in (-90, -10, 10, 90):
+            row.Add(btn('{:+d}'.format(deg), _make_rot_cb(axis, deg)), 88)
         return row
 
     # ── RIGID BODY SOURCE
@@ -643,23 +939,62 @@ def PopulateTool(tool):
     lyt_cam_ctrl.Add(g_ui['btn_detach'],      96)
     lyt_cam_ctrl.Add(g_ui['btn_del_vcam'],    96)
 
-    # ── OSC SOURCE (ZIG SIM Pro)
+    # ── OSC SOURCE
+    lyt_osc_ip = FBHBoxLayout()
+    lbl_osc_ip = FBLabel(); lbl_osc_ip.Caption = 'Bind IP:'
+    g_ui['edit_osc_ip'] = FBEdit()
+    g_ui['edit_osc_ip'].Text = '0.0.0.0'
+    lyt_osc_ip.Add(lbl_osc_ip, 60); lyt_osc_ip.Add(g_ui['edit_osc_ip'], 300)
+
     lyt_osc_top = FBHBoxLayout()
     lbl_osc_p = FBLabel(); lbl_osc_p.Caption = 'Port:'
     g_ui['edit_osc_port'] = FBEditNumber()
     g_ui['edit_osc_port'].Min = 1024; g_ui['edit_osc_port'].Max = 65535
     g_ui['edit_osc_port'].Value = 9007; g_ui['edit_osc_port'].Precision = 0
-    g_ui['btn_osc_toggle'] = btn('▶ Start OSC', OnOSCToggleClick)
+    g_ui['btn_osc_toggle'] = btn('Connect', OnOSCToggleClick)
     lyt_osc_top.Add(lbl_osc_p, 38)
     lyt_osc_top.Add(g_ui['edit_osc_port'], 90)
     lyt_osc_top.Add(g_ui['btn_osc_toggle'], 240)
-    g_ui['btn_create_osc_rb'] = btn('Create OSC Rigid Body (ZigSim)', OnCreateOSCRigidBodyClick)
+    g_ui['btn_create_osc_rb'] = btn('Create OSC Source & RigidBody', OnCreateOSCRigidBodyClick)
+    g_ui['btn_reset_osc_data'] = btn('🔄 Reset OSC Data Null', OnResetOSCDataClick)
 
     # ── MOUNTING OFFSET
     g_ui['btn_reset'] = btn('Reset to +Z (default)', OnResetOffsetClick)
     g_ui['rot_x'] = rot_row('X')
     g_ui['rot_y'] = rot_row('Y')
     g_ui['rot_z'] = rot_row('Z')
+
+    # ── OSC AXIS DIRECTION (Flip toggles)
+    _FLIP_NAMES    = ['Tx', 'Ty', 'Tz', 'Rx', 'Ry', 'Rz']
+    _FLIP_DEFAULTS = g_state.get('osc_flip', [1,1,-1,1,-1,-1])
+
+    def _make_flip_cb(axis_idx):
+        name = _FLIP_NAMES[axis_idx]
+        key  = 'flip_' + name.lower()
+        def cb(c, e):
+            flip = g_state.get('osc_flip', [1,1,-1,1,-1,-1])
+            flip[axis_idx] = -flip[axis_idx]
+            g_state['osc_flip'] = flip
+            c.Caption = name + (' (+)' if flip[axis_idx] > 0 else ' (-)')
+        return cb
+
+    lyt_flip_pos = FBHBoxLayout()
+    lbl_fp = FBLabel(); lbl_fp.Caption = 'POS:'
+    lyt_flip_pos.Add(lbl_fp, 38)
+    for i in range(3):
+        sign = '(+)' if _FLIP_DEFAULTS[i] > 0 else '(-)'
+        b = btn(_FLIP_NAMES[i] + ' ' + sign, _make_flip_cb(i))
+        g_ui['flip_' + _FLIP_NAMES[i].lower()] = b
+        lyt_flip_pos.Add(b, 117)
+
+    lyt_flip_rot = FBHBoxLayout()
+    lbl_fr = FBLabel(); lbl_fr.Caption = 'ROT:'
+    lyt_flip_rot.Add(lbl_fr, 38)
+    for i in range(3, 6):
+        sign = '(+)' if _FLIP_DEFAULTS[i] > 0 else '(-)'
+        b = btn(_FLIP_NAMES[i] + ' ' + sign, _make_flip_cb(i))
+        g_ui['flip_' + _FLIP_NAMES[i].lower()] = b
+        lyt_flip_rot.Add(b, 117)
 
     # ── FOV / ZOOM
     lyt_fov = FBHBoxLayout()
@@ -711,18 +1046,23 @@ def PopulateTool(tool):
 
     # ── Assemble layout
     lay = g_ui['main_layout']
-    lay.Add(hdr('RIGID BODY SOURCE'),          25)
-    lay.Add(lyt_src,                           32)
-    lay.Add(g_ui['btn_create'],                35)
-    lay.Add(lyt_cam_ctrl,                      35)
-    lay.Add(hdr('OSC SOURCE (ZIG SIM Pro)'),   25)
+    lay.Add(hdr('OSC SOURCE'),              25)
+    lay.Add(lyt_osc_ip,                         30)
     lay.Add(lyt_osc_top,                        35)
     lay.Add(g_ui['btn_create_osc_rb'],          35)
+    lay.Add(g_ui['btn_reset_osc_data'],         35)
+    lay.Add(hdr('RIGID BODY SOURCE'),           25)
+    lay.Add(lyt_src,                            32)
+    lay.Add(g_ui['btn_create'],                 35)
+    lay.Add(lyt_cam_ctrl,                       35)
     lay.Add(hdr('MOUNTING OFFSET'),             25)
     lay.Add(g_ui['btn_reset'],            30)
     lay.Add(g_ui['rot_x'],                30)
     lay.Add(g_ui['rot_y'],                30)
     lay.Add(g_ui['rot_z'],                30)
+    lay.Add(hdr('OSC AXIS DIRECTION'),    25)
+    lay.Add(lyt_flip_pos,                 35)
+    lay.Add(lyt_flip_rot,                 35)
     lay.Add(hdr('ZOOM / FOV'),            25)
     lay.Add(lyt_fov,                      30)
     lay.Add(lyt_zoom,                     35)
