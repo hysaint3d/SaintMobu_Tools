@@ -1,5 +1,5 @@
 """
-Skeleton_Generator.py
+MobuSkeleton_Toolkit.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Generate a standard T-Pose skeleton (VMC or HIK naming), match its proportions
 to any HIK characterized character, and characterize as HIK.
@@ -107,9 +107,9 @@ UE_NAME = {
 VMC_NAME = {k: k for k in BONE_POS}
 
 # ── State ─────────────────────────────────────────────────────────────────────
-if not hasattr(sys, "skelgen"):
-    sys.skelgen = {"bones":{}, "root":None, "mode":"vmc", "ns":""}
-g_st  = sys.skelgen
+if not hasattr(sys, "mobu_skeleton_toolkit_state"):
+    sys.mobu_skeleton_toolkit_state = {"bones":{}, "root":None, "mode":"vmc", "ns":""}
+g_st  = sys.mobu_skeleton_toolkit_state
 g_ui  = {}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -558,11 +558,11 @@ def PopulateTool(tool):
     OnRefreshClick(None, None)
 
 def CreateTool():
-    tool = FBCreateUniqueTool("Saint's Skeleton Generator")
+    tool = FBCreateUniqueTool("MobuSkeleton_Toolkit")
     if tool:
         PopulateTool(tool)
         ShowTool(tool)
-        FBMessageBox("Welcome", "本工具由小聖腦絲與Antigravity協作完成\nhttps://www.facebook.com/hysaint3d.mocap", "OK")
+        FBMessageBox("Welcome", "MobuSkeleton_Toolkit\n本工具由小聖腦絲與Antigravity協作完成\nhttps://www.facebook.com/hysaint3d.mocap", "OK")
     else:
         print("Error creating Skeleton Generator tool.")
 

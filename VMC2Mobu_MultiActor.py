@@ -665,8 +665,8 @@ def OnRotateRef180Click(control, event):
         FBSystem().Scene.Evaluate()
 
 def PopulateTool(tool):
-    tool.StartSizeX = 250
-    tool.StartSizeY = 600
+    tool.StartSizeX = 240
+    tool.StartSizeY = 680
     
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft, "")
     y = FBAddRegionParam(0, FBAttachType.kFBAttachTop, "")
@@ -682,13 +682,13 @@ def PopulateTool(tool):
     g_ui["lbl_actor"] = FBLabel()
     g_ui["lbl_actor"].Caption = "Select Actor:"
     g_ui["list_actor"] = FBList()
-    g_ui["list_actor"].Items.append("Actor 1 (Namespace: VMC1)")
-    g_ui["list_actor"].Items.append("Actor 2 (Namespace: VMC2)")
-    g_ui["list_actor"].Items.append("Actor 3 (Namespace: VMC3)")
+    g_ui["list_actor"].Items.append("VMC1 (Actor 1)")
+    g_ui["list_actor"].Items.append("VMC2 (Actor 2)")
+    g_ui["list_actor"].Items.append("VMC3 (Actor 3)")
     g_ui["list_actor"].ItemIndex = 0
     g_ui["list_actor"].OnChange.Add(OnActorChange)
-    g_ui["lyt_actor"].Add(g_ui["lbl_actor"], 70)
-    g_ui["lyt_actor"].Add(g_ui["list_actor"], 150)
+    g_ui["lyt_actor"].Add(g_ui["lbl_actor"], 75)
+    g_ui["lyt_actor"].Add(g_ui["list_actor"], 140)
     
     # IP Address
     g_ui["lyt_ip"] = FBHBoxLayout()
@@ -696,8 +696,8 @@ def PopulateTool(tool):
     g_ui["lbl_ip"].Caption = "Bind IP:"
     g_ui["edit_ip"] = FBEdit()
     g_ui["edit_ip"].Text = "0.0.0.0"
-    g_ui["lyt_ip"].Add(g_ui["lbl_ip"], 70)
-    g_ui["lyt_ip"].Add(g_ui["edit_ip"], 100)
+    g_ui["lyt_ip"].Add(g_ui["lbl_ip"], 65)
+    g_ui["lyt_ip"].Add(g_ui["edit_ip"], 140)
     
     # Port
     g_ui["lyt_port"] = FBHBoxLayout()
@@ -706,8 +706,8 @@ def PopulateTool(tool):
     
     g_ui["edit_port"] = FBEdit()
     g_ui["edit_port"].Text = "39539"
-    g_ui["lyt_port"].Add(g_ui["lbl_port"], 70)
-    g_ui["lyt_port"].Add(g_ui["edit_port"], 100)
+    g_ui["lyt_port"].Add(g_ui["lbl_port"], 65)
+    g_ui["lyt_port"].Add(g_ui["edit_port"], 140)
     
     g_ui["btn_connect"] = FBButton()
     g_ui["btn_connect"].Caption = "Connect"
@@ -730,8 +730,8 @@ def PopulateTool(tool):
     g_ui["btn_rot_180"].Caption = "Rot Ref Y +180"
     g_ui["btn_rot_180"].OnClick.Add(OnRotateRef180Click)
     
-    g_ui["lyt_rot"].Add(g_ui["btn_rot_90"], 115)
-    g_ui["lyt_rot"].Add(g_ui["btn_rot_180"], 115)
+    g_ui["lyt_rot"].Add(g_ui["btn_rot_90"], 105)
+    g_ui["lyt_rot"].Add(g_ui["btn_rot_180"], 105)
     
     g_ui["btn_expr"] = FBButton()
     g_ui["btn_expr"].Caption = "Generate Expressions"
@@ -766,8 +766,8 @@ def PopulateTool(tool):
     g_ui["edit_record_len"] = FBEditNumber()
     g_ui["edit_record_len"].Value = 600
     g_ui["edit_record_len"].Precision = 0
-    g_ui["lyt_record_len"].Add(g_ui["lbl_record_len"], 120)
-    g_ui["lyt_record_len"].Add(g_ui["edit_record_len"], 80)
+    g_ui["lyt_record_len"].Add(g_ui["lbl_record_len"], 110)
+    g_ui["lyt_record_len"].Add(g_ui["edit_record_len"], 90)
     
     g_ui["btn_force_record"] = FBButton()
     g_ui["btn_force_record"].Caption = "🔴 Record VMC"

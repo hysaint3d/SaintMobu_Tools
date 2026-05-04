@@ -1,5 +1,5 @@
 """
-VCam_Generator.py
+MobuVCam_Toolkit.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Virtual Camera Generator for MotionBuilder.
 Attaches a virtual FBCamera to any 6DOF rigid body / Null / Skeleton in scene.
@@ -44,15 +44,15 @@ except Exception:
     pass
 
 # ── State ─────────────────────────────────────────────────────────────────────
-if hasattr(sys, 'vcam_gen_state') and sys.vcam_gen_state:
-    try: FBSystem().OnUIIdle.Remove(sys.vcam_gen_idle_func)
+if hasattr(sys, 'mobu_vcam_toolkit_state') and sys.mobu_vcam_toolkit_state:
+    try: FBSystem().OnUIIdle.Remove(sys.mobu_vcam_toolkit_idle_func)
     except: pass
-    _s = sys.vcam_gen_state.get('osc_socket')
+    _s = sys.mobu_vcam_toolkit_state.get('osc_socket')
     if _s:
         try: _s.close()
         except: pass
 
-sys.vcam_gen_state = {
+sys.mobu_vcam_toolkit_state = {
     'camera':          None,
     'offset_null':     None,
     'target_model':    None,
@@ -82,7 +82,7 @@ sys.vcam_gen_state = {
     'ovr_ctrl_device': 1,
     'ovr_prev_btns':   0,
 }
-g_state = sys.vcam_gen_state
+g_state = sys.mobu_vcam_toolkit_state
 g_ui    = {}
 
 # ── XInput (Xbox-compatible gamepad via ctypes) ────────────────────────────────
@@ -271,7 +271,7 @@ def _connect_osc():
         try: FBSystem().OnUIIdle.Remove(OnUIIdle)
         except: pass
         FBSystem().OnUIIdle.Add(OnUIIdle)
-        sys.vcam_gen_idle_func = OnUIIdle
+        sys.mobu_vcam_toolkit_idle_func = OnUIIdle
         if 'btn_osc_toggle' in g_ui:
             g_ui['btn_osc_toggle'].Caption = 'Disconnect'
         _update_status('Connected: listening on {}:{}'.format(ip, port))
@@ -325,7 +325,7 @@ def _connect_openvr():
         # Register idle if not already
         FBSystem().OnUIIdle.Remove(OnUIIdle)
         FBSystem().OnUIIdle.Add(OnUIIdle)
-        sys.vcam_gen_idle_func = OnUIIdle
+        sys.mobu_vcam_toolkit_idle_func = OnUIIdle
         if 'btn_ovr_toggle' in g_ui:
             g_ui['btn_ovr_toggle'].Caption = 'Disconnect OpenVR'
         _update_status('OpenVR connected. SteamVR must be running.')
@@ -785,7 +785,7 @@ def OnCreateCameraClick(c, e):
 
     FBSystem().OnUIIdle.Remove(OnUIIdle)
     FBSystem().OnUIIdle.Add(OnUIIdle)
-    sys.vcam_gen_idle_func = OnUIIdle
+    sys.mobu_vcam_toolkit_idle_func = OnUIIdle
 
     _update_status('VCam attached to: ' + model_name)
     FBMessageBox('Success', 'VCam created!\nAttached to: {}\n\nClick "Set Active Camera" to view through it.'.format(model_name), 'OK')
@@ -1413,13 +1413,13 @@ def PopulateTool(tool):
 
 
 def CreateTool():
-    tool_name = "Saint's Virtual Camera System"
+    tool_name = "MobuVCam_Toolkit"
     tool = FBCreateUniqueTool(tool_name)
     if tool:
         PopulateTool(tool)
         ShowTool(tool)
         FBMessageBox('Welcome',
-            "Saint's VCS — Virtual Camera System\n"
+            "MobuVCam_Toolkit\n"
             "由小聖腦絲與Antigravity協作完成\n"
             "https://www.facebook.com/hysaint3d.mocap", 'OK')
     else:

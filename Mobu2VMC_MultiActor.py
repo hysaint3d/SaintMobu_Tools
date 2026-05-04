@@ -880,7 +880,7 @@ def OnMatchFromVRMClick(control, event):
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 def PopulateTool(tool):
-    tool.StartSizeX = 300
+    tool.StartSizeX = 240
     tool.StartSizeY = 880
 
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft,   "")
@@ -897,13 +897,13 @@ def PopulateTool(tool):
     g_ui["lbl_actor"] = FBLabel()
     g_ui["lbl_actor"].Caption = "Select Actor:"
     g_ui["list_actor"] = FBList()
-    g_ui["list_actor"].Items.append("Actor 1 (Namespace: VMC1)")
-    g_ui["list_actor"].Items.append("Actor 2 (Namespace: VMC2)")
-    g_ui["list_actor"].Items.append("Actor 3 (Namespace: VMC3)")
+    g_ui["list_actor"].Items.append("VMC1 (Actor 1)")
+    g_ui["list_actor"].Items.append("VMC2 (Actor 2)")
+    g_ui["list_actor"].Items.append("VMC3 (Actor 3)")
     g_ui["list_actor"].ItemIndex = 0
     g_ui["list_actor"].OnChange.Add(OnActorChange)
-    g_ui["lyt_actor"].Add(g_ui["lbl_actor"], 80)
-    g_ui["lyt_actor"].Add(g_ui["list_actor"], 180)
+    g_ui["lyt_actor"].Add(g_ui["lbl_actor"], 75)
+    g_ui["lyt_actor"].Add(g_ui["list_actor"], 140)
 
     def hdr(text):
         lbl = FBLabel()
@@ -915,37 +915,37 @@ def PopulateTool(tool):
         b = FBButton(); b.Caption = caption; b.OnClick.Add(cb); return b
 
     # ── SKELETON buttons
-    g_ui["btn_scan"]  = btn("Scan VMC_ Bones in Scene",     OnScanClick)
-    g_ui["btn_gen"]   = btn("Generate Standard Skeleton",   OnGenerateSkeletonClick)
-    g_ui["btn_char"]  = btn("Characterize HIK",             OnCharacterizeClick)
-    g_ui["btn_del"]   = btn("Delete VMC Skeleton",          OnDeleteSkeletonClick)
-    g_ui["btn_match"] = btn("Match Proportions to HIK",    OnMatchProportionsClick)
+    g_ui["btn_scan"]  = btn("Scan VMC Bones",           OnScanClick)
+    g_ui["btn_gen"]   = btn("Generate Skeleton",        OnGenerateSkeletonClick)
+    g_ui["btn_char"]  = btn("Characterize HIK",         OnCharacterizeClick)
+    g_ui["btn_del"]   = btn("Delete Skeleton",          OnDeleteSkeletonClick)
+    g_ui["btn_match"] = btn("Match Proportions",        OnMatchProportionsClick)
     
     # HIK Character source list
     g_ui["lyt_char_src"] = FBHBoxLayout()
     g_ui["list_char_source"] = FBList()
     g_ui["btn_refresh_chars"] = btn("Refresh", OnRefreshCharListClick)
-    g_ui["lyt_char_src"].Add(g_ui["list_char_source"], 175)
-    g_ui["lyt_char_src"].Add(g_ui["btn_refresh_chars"], 70)
+    g_ui["lyt_char_src"].Add(g_ui["list_char_source"], 150)
+    g_ui["lyt_char_src"].Add(g_ui["btn_refresh_chars"], 65)
 
     # VRM File browse
     g_ui["lyt_vrm_path"] = FBHBoxLayout()
     g_ui["edit_vrm_path"] = FBEdit(); g_ui["edit_vrm_path"].Text = ""
-    g_ui["btn_browse_vrm"] = btn("Browse VRM...", OnBrowseVRMClick)
-    g_ui["lyt_vrm_path"].Add(g_ui["edit_vrm_path"],   155)
-    g_ui["lyt_vrm_path"].Add(g_ui["btn_browse_vrm"],   95)
-    g_ui["btn_match_vrm"] = btn("Match Proportions from VRM", OnMatchFromVRMClick)
+    g_ui["btn_browse_vrm"] = btn("Browse...", OnBrowseVRMClick)
+    g_ui["lyt_vrm_path"].Add(g_ui["edit_vrm_path"],   145)
+    g_ui["lyt_vrm_path"].Add(g_ui["btn_browse_vrm"],   70)
+    g_ui["btn_match_vrm"] = btn("Match from VRM File", OnMatchFromVRMClick)
 
     # ── Send Target
     g_ui["lyt_ip"]   = FBHBoxLayout()
     g_ui["lbl_ip"]   = FBLabel();     g_ui["lbl_ip"].Caption  = "Target IP:"
     g_ui["edit_ip"]  = FBEdit();      g_ui["edit_ip"].Text    = "127.0.0.1"
-    g_ui["lyt_ip"].Add(g_ui["lbl_ip"], 80); g_ui["lyt_ip"].Add(g_ui["edit_ip"], 180)
+    g_ui["lyt_ip"].Add(g_ui["lbl_ip"], 75); g_ui["lyt_ip"].Add(g_ui["edit_ip"], 140)
 
     g_ui["lyt_port"]  = FBHBoxLayout()
     g_ui["lbl_port"]  = FBLabel();      g_ui["lbl_port"].Caption  = "UDP Port:"
     g_ui["edit_port"] = FBEdit(); g_ui["edit_port"].Text    = "39539"
-    g_ui["lyt_port"].Add(g_ui["lbl_port"], 80); g_ui["lyt_port"].Add(g_ui["edit_port"], 180)
+    g_ui["lyt_port"].Add(g_ui["lbl_port"], 75); g_ui["lyt_port"].Add(g_ui["edit_port"], 140)
 
     # ── FPS selector
     g_ui["lyt_fps"]   = FBHBoxLayout()
@@ -953,10 +953,10 @@ def PopulateTool(tool):
     g_ui["btn_fps24"] = FBButton(); g_ui["btn_fps24"].Caption = " 24 "; g_ui["btn_fps24"].OnClick.Add(OnFPS24Click)
     g_ui["btn_fps30"] = FBButton(); g_ui["btn_fps30"].Caption = "[30]"; g_ui["btn_fps30"].OnClick.Add(OnFPS30Click)
     g_ui["btn_fps60"] = FBButton(); g_ui["btn_fps60"].Caption = " 60 "; g_ui["btn_fps60"].OnClick.Add(OnFPS60Click)
-    g_ui["lyt_fps"].Add(g_ui["lbl_fps"],   80)
-    g_ui["lyt_fps"].Add(g_ui["btn_fps24"], 55)
-    g_ui["lyt_fps"].Add(g_ui["btn_fps30"], 55)
-    g_ui["lyt_fps"].Add(g_ui["btn_fps60"], 55)
+    g_ui["lyt_fps"].Add(g_ui["lbl_fps"],   75)
+    g_ui["lyt_fps"].Add(g_ui["btn_fps24"], 45)
+    g_ui["lyt_fps"].Add(g_ui["btn_fps30"], 45)
+    g_ui["lyt_fps"].Add(g_ui["btn_fps60"], 45)
 
     # ── Global Position Weight X
     g_ui["lyt_hip_x"]     = FBHBoxLayout()
@@ -968,7 +968,7 @@ def PopulateTool(tool):
     g_ui["slider_hip_x"].Precision = 2
     g_ui["slider_hip_x"].OnChange.Add(OnHipScaleXChange)
     g_ui["lyt_hip_x"].Add(g_ui["lbl_hip_x"],     100)
-    g_ui["lyt_hip_x"].Add(g_ui["slider_hip_x"],  150)
+    g_ui["lyt_hip_x"].Add(g_ui["slider_hip_x"],  115)
 
     # ── Global Position Weight Z
     g_ui["lyt_hip_z"]     = FBHBoxLayout()
@@ -980,7 +980,7 @@ def PopulateTool(tool):
     g_ui["slider_hip_z"].Precision = 2
     g_ui["slider_hip_z"].OnChange.Add(OnHipScaleZChange)
     g_ui["lyt_hip_z"].Add(g_ui["lbl_hip_z"],     100)
-    g_ui["lyt_hip_z"].Add(g_ui["slider_hip_z"],  150)
+    g_ui["lyt_hip_z"].Add(g_ui["slider_hip_z"],  115)
 
     # ── Start / Stop (single button)
     g_ui["btn_stream"] = btn("Start Sending", OnToggleSendClick)

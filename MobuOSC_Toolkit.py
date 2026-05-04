@@ -1,5 +1,5 @@
 """
-MobuOSC_Manager.py
+MobuOSC_Toolkit.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Bidirectional OSC Manager for MotionBuilder — receive arbitrary OSC data
 (exposed as animatable properties on OSC_Data null) and send selected scene
@@ -28,7 +28,7 @@ from pyfbsdk import *
 from pyfbsdk_additions import *
 
 # Clean up previous states from old plugins or this plugin
-for state_name in ["mobu2osc_state", "osc_state", "osc_mgr_state"]:
+for state_name in ["mobu2osc_state", "osc_state", "osc_mgr_state", "mobu_osc_toolkit_state"]:
     if hasattr(sys, state_name) and getattr(sys, state_name) is not None:
         state = getattr(sys, state_name)
         if hasattr(state, "sock") and state.sock:
@@ -44,7 +44,7 @@ for state_name in ["mobu2osc_state", "osc_state", "osc_mgr_state"]:
         except: pass
         try: FBSystem().OnUIIdle.Remove(sys.osc_state_idle_func)
         except: pass
-        try: FBSystem().OnUIIdle.Remove(sys.osc_mgr_idle_func)
+        try: FBSystem().OnUIIdle.Remove(sys.mobu_osc_toolkit_idle_func)
         except: pass
         setattr(sys, state_name, None)
 
@@ -69,8 +69,8 @@ class OSCManager_State:
         self.last_ui_update = 0.0
         self.last_applied_cache = {}
 
-sys.osc_mgr_state = OSCManager_State()
-g_state = sys.osc_mgr_state
+sys.mobu_osc_toolkit_state = OSCManager_State()
+g_state = sys.mobu_osc_toolkit_state
 g_ui = {}
 
 # ── OSC Encoding (Sender) ────────────────────────────────────────────────────────
@@ -321,7 +321,7 @@ def OnStartStreamingClick(control, event):
             except: pass
             sys.OnUIIdle.Add(OnUIIdle)
             import sys as python_sys
-            python_sys.osc_mgr_idle_func = OnUIIdle
+            python_sys.mobu_osc_toolkit_idle_func = OnUIIdle
         except Exception as e:
             FBMessageBox("Error", f"Could not start socket: {e}", "OK")
     else:
@@ -356,7 +356,7 @@ def OnConnectClick(control, event):
             except: pass
             sys.OnUIIdle.Add(OnUIIdle)
             import sys as python_sys
-            python_sys.osc_mgr_idle_func = OnUIIdle
+            python_sys.mobu_osc_toolkit_idle_func = OnUIIdle
         except Exception as e:
             g_ui["lbl_recv_status"].Caption = "Status: Error binding port!"
             FBMessageBox("Error", f"Could not bind port {port}: {e}", "OK")
@@ -503,8 +503,8 @@ def BuildSenderView(view):
     lyt_list_btns = FBHBoxLayout()
     btn_add = FBButton(); btn_add.Caption = "Add Selected"; btn_add.OnClick.Add(OnAddModelsClick)
     btn_rem = FBButton(); btn_rem.Caption = "Remove"; btn_rem.OnClick.Add(OnRemoveModelClick)
-    lyt_list_btns.Add(btn_add, 100)
-    lyt_list_btns.Add(btn_rem, 100)
+    lyt_list_btns.Add(btn_add, 110)
+    lyt_list_btns.Add(btn_rem, 110)
     view.Add(lyt_list_btns, 30)
     
     view.Add(create_header("NETWORK (Sender)"), 25)
@@ -513,7 +513,7 @@ def BuildSenderView(view):
     lbl_ip = FBLabel(); lbl_ip.Caption = "Target IP:"
     g_ui["edit_send_ip"] = FBEdit(); g_ui["edit_send_ip"].Text = "127.0.0.1"
     lyt_ip.Add(lbl_ip, 70)
-    lyt_ip.Add(g_ui["edit_send_ip"], 100)
+    lyt_ip.Add(g_ui["edit_send_ip"], 135)
     view.Add(lyt_ip, 30)
     
     lyt_port = FBHBoxLayout()
@@ -521,7 +521,7 @@ def BuildSenderView(view):
     g_ui["edit_send_port"] = FBEdit()
     g_ui["edit_send_port"].Text = "10001"
     lyt_port.Add(lbl_port, 70)
-    lyt_port.Add(g_ui["edit_send_port"], 100)
+    lyt_port.Add(g_ui["edit_send_port"], 135)
     view.Add(lyt_port, 30)
     
     g_ui["btn_stream"] = FBButton()
@@ -540,7 +540,7 @@ def BuildReceiverView(view):
     lbl_ip = FBLabel(); lbl_ip.Caption = "Bind IP:"
     g_ui["edit_recv_ip"] = FBEdit(); g_ui["edit_recv_ip"].Text = "0.0.0.0"
     lyt_ip.Add(lbl_ip, 70)
-    lyt_ip.Add(g_ui["edit_recv_ip"], 100)
+    lyt_ip.Add(g_ui["edit_recv_ip"], 135)
     view.Add(lyt_ip, 30)
     
     lyt_port = FBHBoxLayout()
@@ -548,7 +548,7 @@ def BuildReceiverView(view):
     g_ui["edit_recv_port"] = FBEdit()
     g_ui["edit_recv_port"].Text = "10000"
     lyt_port.Add(lbl_port, 70)
-    lyt_port.Add(g_ui["edit_recv_port"], 100)
+    lyt_port.Add(g_ui["edit_recv_port"], 135)
     view.Add(lyt_port, 30)
     
     g_ui["btn_connect"] = FBButton()
@@ -557,16 +557,16 @@ def BuildReceiverView(view):
     view.Add(g_ui["btn_connect"], 35)
     
     view.Add(create_header("OSC DATA"), 25)
-    btn_create_data = FBButton(); btn_create_data.Caption = "Create Data Channels on OSC_Data"
+    btn_create_data = FBButton(); btn_create_data.Caption = "Create Channels"
     btn_create_data.OnClick.Add(OnCreateDataChannelsClick)
     view.Add(btn_create_data, 35)
     
-    btn_connect_model = FBButton(); btn_connect_model.Caption = "Connect Channels to Selected Model"
+    btn_connect_model = FBButton(); btn_connect_model.Caption = "Connect to Selected"
     btn_connect_model.OnClick.Add(OnConnectToModelClick)
     view.Add(btn_connect_model, 35)
     
     view.Add(create_header("RESET"), 25)
-    btn_delete = FBButton(); btn_delete.Caption = "Delete OSC_Data & Reset"
+    btn_delete = FBButton(); btn_delete.Caption = "Delete Data & Reset"
     btn_delete.OnClick.Add(OnDeleteDataClick)
     view.Add(btn_delete, 35)
     
@@ -575,7 +575,7 @@ def BuildReceiverView(view):
     view.Add(g_ui["lbl_recv_status"], 35)
 
 def PopulateTool(tool):
-    tool.StartSizeX = 300
+    tool.StartSizeX = 240
     tool.StartSizeY = 430
     
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft, "")
@@ -587,8 +587,8 @@ def PopulateTool(tool):
     tool.AddRegion("tab", "tab", x, y, w, y_tab)
     
     tab_panel = FBTabPanel()
-    tab_panel.Items.append("Receiver (OSC -> Mobu)")
-    tab_panel.Items.append("Sender (Mobu -> OSC)")
+    tab_panel.Items.append("OSC-In")
+    tab_panel.Items.append("OSC-Out")
     tool.SetControl("tab", tab_panel)
     
     y_content_start = FBAddRegionParam(0, FBAttachType.kFBAttachBottom, "tab")
@@ -612,12 +612,12 @@ def PopulateTool(tool):
     tab_panel.OnChange.Add(OnTabChange)
 
 def CreateTool():
-    tool_name = "Saint's MobuOSC Manager"
+    tool_name = "MobuOSC_Toolkit"
     tool = FBCreateUniqueTool(tool_name)
     if tool:
         PopulateTool(tool)
         ShowTool(tool)
-        FBMessageBox("Welcome", "本工具由小聖腦絲與Antigravity協作完成\n整合了 Sender 與 Receiver 功能\nhttps://www.facebook.com/hysaint3d.mocap", "OK")
+        FBMessageBox("Welcome", "MobuOSC_Toolkit\n本工具由小聖腦絲與Antigravity協作完成\n整合了 Sender 與 Receiver 功能\nhttps://www.facebook.com/hysaint3d.mocap", "OK")
     else:
         print("Error creating tool")
 
