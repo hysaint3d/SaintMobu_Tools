@@ -339,14 +339,22 @@ def OnGenerateClick(control, event):
             
     for b_name, m in state.models.items():
         parent_name = unity_hierarchy.get(b_name)
-        if parent_name == "UpperChest" and "UpperChest" not in state.models:
-            parent_name = "Chest"
-        elif parent_name == "Chest" and "Chest" not in state.models:
-            parent_name = "Spine"
+        
+        # Robust fallback: keep looking up the hierarchy chain until we find a parent that actually exists in the incoming data
+        while parent_name and parent_name not in state.models:
+            parent_name = unity_hierarchy.get(parent_name)
             
         if parent_name and parent_name in state.models:
             m.Parent = state.models[parent_name]
             
+    if "Ref" not in state.models:
+        m_ref = FBModelNull(prefix + "VMC_Ref")
+        m_ref.Show = True
+        m_ref.Size = 80.0
+        m_ref.Translation.SetAnimated(True)
+        m_ref.Rotation.SetAnimated(True)
+        state.models["Ref"] = m_ref
+
     if "Root" not in state.models:
         m = FBModelNull(prefix + "VMC_Root")
         m.Show = True
@@ -356,6 +364,8 @@ def OnGenerateClick(control, event):
         state.models["Root"] = m
         if "Hips" in state.models:
             state.models["Hips"].Parent = m
+        
+        m.Parent = state.models["Ref"]
             
     FBSystem().Scene.Evaluate()
     FBMessageBox("Success", "Skeleton Generated for Actor {}!".format(act_id), "OK")
@@ -634,6 +644,26 @@ def OnForceRecordClick(control, event):
         except Exception as e:
             print("Error setting out point:", e)
 
+def OnRotateRef90Click(control, event):
+    act_id = current_actor()
+    state = g_vmc_states[act_id]
+    if "Ref" in state.models:
+        m_ref = state.models["Ref"]
+        rot = FBVector3d()
+        m_ref.GetVector(rot, FBModelTransformationType.kModelRotation, False)
+        m_ref.SetVector(FBVector3d(rot[0], rot[1] + 90.0, rot[2]), FBModelTransformationType.kModelRotation, False)
+        FBSystem().Scene.Evaluate()
+
+def OnRotateRef180Click(control, event):
+    act_id = current_actor()
+    state = g_vmc_states[act_id]
+    if "Ref" in state.models:
+        m_ref = state.models["Ref"]
+        rot = FBVector3d()
+        m_ref.GetVector(rot, FBModelTransformationType.kModelRotation, False)
+        m_ref.SetVector(FBVector3d(rot[0], rot[1] + 180.0, rot[2]), FBModelTransformationType.kModelRotation, False)
+        FBSystem().Scene.Evaluate()
+
 def PopulateTool(tool):
     tool.StartSizeX = 250
     tool.StartSizeY = 600
@@ -691,6 +721,18 @@ def PopulateTool(tool):
     g_ui["btn_characterize"].Caption = "Characterize Skeleton"
     g_ui["btn_characterize"].OnClick.Add(OnCharacterizeClick)
     
+    g_ui["lyt_rot"] = FBHBoxLayout()
+    g_ui["btn_rot_90"] = FBButton()
+    g_ui["btn_rot_90"].Caption = "Rot Ref Y +90"
+    g_ui["btn_rot_90"].OnClick.Add(OnRotateRef90Click)
+    
+    g_ui["btn_rot_180"] = FBButton()
+    g_ui["btn_rot_180"].Caption = "Rot Ref Y +180"
+    g_ui["btn_rot_180"].OnClick.Add(OnRotateRef180Click)
+    
+    g_ui["lyt_rot"].Add(g_ui["btn_rot_90"], 115)
+    g_ui["lyt_rot"].Add(g_ui["btn_rot_180"], 115)
+    
     g_ui["btn_expr"] = FBButton()
     g_ui["btn_expr"].Caption = "Generate Expressions"
     g_ui["btn_expr"].OnClick.Add(OnConnectExpressionsClick)
@@ -740,6 +782,7 @@ def PopulateTool(tool):
     g_ui["main_layout"].Add(g_ui["hdr_skeleton"], 25)
     g_ui["main_layout"].Add(g_ui["btn_gen_skeleton"], 35)
     g_ui["main_layout"].Add(g_ui["btn_characterize"], 35)
+    g_ui["main_layout"].Add(g_ui["lyt_rot"], 35)
     
     g_ui["main_layout"].Add(g_ui["hdr_facial"], 25)
     g_ui["main_layout"].Add(g_ui["btn_expr"], 35)

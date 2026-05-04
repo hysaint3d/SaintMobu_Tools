@@ -74,7 +74,13 @@ sys.vcam_gen_state = {
     # OpenVR
     'ovr_system':      None,
     'ovr_listening':   False,
-    'ovr_device':      0,       # tracked device index (0 = HMD)
+    'ovr_device':      1,       # tracked device index (0 = HMD)
+    'ovr_rigid_body':  None,
+    'ovr_data_null':   None,
+    'ovr_constraint':  None,
+    'ovr_con_ok':      False,
+    'ovr_ctrl_device': 1,
+    'ovr_prev_btns':   0,
 }
 g_state = sys.vcam_gen_state
 g_ui    = {}
@@ -487,12 +493,135 @@ def OnCreateOSCRigidBodyClick(c, e):
                 lst.ItemIndex = i; break
     _update_status('VCam_OSC_Data + VCam_RigidBody created. Start OSC, then Create & Attach Camera.')
 
+
+def _ensure_ovr_data_null():
+    """Get or create VCam_OVR_Data null."""
+    existing = g_state.get('ovr_data_null')
+    if existing:
+        try:
+            _ = existing.Name
+            return existing
+        except:
+            g_state['ovr_data_null'] = None
+    for comp in FBSystem().Scene.Components:
+        if isinstance(comp, FBModel) and comp.Name == 'VCam_OVR_Data':
+            g_state['ovr_data_null'] = comp
+            return comp
+    null = FBModelNull('VCam_OVR_Data')
+    null.Show = True
+    null.Size = 5.0
+    g_state['ovr_data_null'] = null
+    return null
+
+def OnResetOVRDataClick(c, e):
+    old = g_state.get('ovr_data_null')
+    if old:
+        try: old.FBDelete()
+        except: pass
+    g_state['ovr_data_null'] = None
+    null = _ensure_ovr_data_null()
+    rb = g_state.get('ovr_rigid_body')
+    old_con = g_state.get('ovr_constraint')
+    if old_con:
+        try: old_con.FBDelete()
+        except: pass
+    g_state['ovr_constraint'] = None
+    g_state['ovr_con_ok']     = False
+    if rb and null:
+        _create_ovr_constraint(null, rb)
+    _update_status('VCam_OVR_Data reset.')
+
+def _create_ovr_constraint(ovr_data, rb):
+    g_state['ovr_con_ok'] = False
+    try:
+        con = FBConstraintRelation('VCam_OVR_Link')
+        src_box  = con.SetAsSource(ovr_data)
+        trgt_box = con.ConstrainObject(rb)
+        con.SetBoxPosition(src_box,  50, 200)
+        con.SetBoxPosition(trgt_box, 400, 200)
+
+        src_out = src_box.AnimationNodeOutGet()
+        trgt_in = trgt_box.AnimationNodeInGet()
+
+        def find_node(parent, name):
+            if not parent: return None
+            for n in parent.Nodes:
+                 if n.Name.lower() == name.lower(): return n
+            return None
+
+        connected = 0
+        for node_name in ('Translation', 'Rotation'):
+            src_n  = find_node(src_out, node_name)
+            trgt_n = find_node(trgt_in,  node_name)
+            if src_n and trgt_n:
+                try:
+                    FBConnect(src_n, trgt_n)
+                    connected += 1
+                except: pass
+
+        con.Active = True
+        g_state['ovr_constraint'] = con
+        g_state['ovr_con_ok']     = (connected >= 2)
+        return con
+    except:
+        g_state['ovr_constraint'] = None
+        g_state['ovr_con_ok']     = False
+        return None
+
+def OnCreateOVRRigidBodyClick(c, e):
+    existing = g_state.get('ovr_rigid_body')
+    if existing:
+        try: existing.FBDelete()
+        except: pass
+    old_con = g_state.get('ovr_constraint')
+    if old_con:
+        try: old_con.FBDelete()
+        except: pass
+    g_state['ovr_constraint'] = None
+
+    ovr_data = _ensure_ovr_data_null()
+
+    rb = FBModelNull('VCam_OVR_RigidBody')
+    rb.Show   = True
+    rb.Size   = 30.0
+    rb.Selected = True
+    g_state['ovr_rigid_body'] = rb
+    FBSystem().Scene.Evaluate()
+
+    _create_ovr_constraint(ovr_data, rb)
+
+    OnRefreshClick(None, None)
+    lst = g_ui.get('list_models')
+    if lst:
+        for i in range(len(lst.Items)):
+            if 'VCam_OVR_RigidBody' in lst.Items[i]:
+                lst.ItemIndex = i; break
+    _update_status('VCam_OVR_Data + VCam_OVR_RigidBody created.')
+
 # ── FOV constants ──────────────────────────────────────────────────────────────
-FOV_MIN   = 5.0
-FOV_MAX   = 170.0
+FOV_MIN   = 20.0
+FOV_MAX   = 150.0
 FOV_STEP  = 5.0
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+def _key_vector(prop, vec):
+    prop.SetAnimated(True)
+    node = prop.GetAnimationNode()
+    if node and len(node.Nodes) >= 3:
+        t = FBSystem().LocalTime
+        node.Nodes[0].KeyAdd(t, float(vec[0]))
+        node.Nodes[1].KeyAdd(t, float(vec[1]))
+        node.Nodes[2].KeyAdd(t, float(vec[2]))
+
+def _key_float(prop, val):
+    prop.SetAnimated(True)
+    node = prop.GetAnimationNode()
+    if node:
+        t = FBSystem().LocalTime
+        if len(node.Nodes) > 0:
+            node.Nodes[0].KeyAdd(t, float(val))
+        else:
+            node.KeyAdd(t, float(val))
 def _update_status(msg):
     if 'lbl_status' in g_ui:
         g_ui['lbl_status'].Caption = str(msg)
@@ -561,9 +690,10 @@ def _set_fov(val):
     cam = g_state['camera']
     if cam:
         try:
-            cam.FieldOfView = val
-            if g_state['is_recording']:
-                cam.FieldOfView.Key()
+            if g_state.get('is_recording'):
+                _key_float(cam.FieldOfView, val)
+            else:
+                cam.FieldOfView = val
         except: pass
     if 'edit_fov' in g_ui:
         try: g_ui['edit_fov'].Value = val
@@ -910,15 +1040,20 @@ def OnUIIdle(c, e):
                 rx *= flip[3]; ry *= flip[4]; rz *= flip[5]     # apply flip state
         if osc_null:
             if tx is not None:
-                try: osc_null.SetVector(FBVector3d(tx, ty, tz), FBModelTransformationType.kModelTranslation, True)
-                except: pass
+                if g_state.get('is_recording'):
+                    _key_vector(osc_null.Translation, [tx, ty, tz])
+                else:
+                    try: osc_null.SetVector(FBVector3d(tx, ty, tz), FBModelTransformationType.kModelTranslation, True)
+                    except: pass
             if rx is not None:
-                try: osc_null.SetVector(FBVector3d(rx, ry, rz), FBModelTransformationType.kModelRotation, True)
-                except: pass
+                if g_state.get('is_recording'):
+                    _key_vector(osc_null.Rotation, [rx, ry, rz])
+                else:
+                    try: osc_null.SetVector(FBVector3d(rx, ry, rz), FBModelTransformationType.kModelRotation, True)
+                    except: pass
 
     # ── Fallback bridge: direct RigidBody drive when Constraint not connected ──
-    any_source = g_state['osc_listening'] or g_state['ovr_listening']
-    if any_source and not g_state.get('osc_con_ok'):
+    if g_state['osc_listening'] and not g_state.get('osc_con_ok'):
         rb = g_state.get('osc_rigid_body')
         if rb:
             try:
@@ -930,7 +1065,7 @@ def OnUIIdle(c, e):
                     FBSystem().Scene.Evaluate()
             except: pass
 
-    # ── OpenVR polling (drives same T/R pipeline as OSC) ──────────────────
+    # ── OpenVR polling (drives OVR T/R pipeline) ──────────────────
     if g_state['ovr_listening'] and g_state.get('ovr_system'):
         try:
             vr     = g_state['ovr_system']
@@ -949,14 +1084,18 @@ def OnUIIdle(c, e):
                 rx = rrx * flip[3]
                 ry = rry * flip[4]
                 rz = rrz * flip[5]
-                osc_null = g_state.get('osc_data_null')
-                if osc_null:
-                    try: osc_null.SetVector(FBVector3d(tx,ty,tz), FBModelTransformationType.kModelTranslation, True)
-                    except: pass
-                    try: osc_null.SetVector(FBVector3d(rx,ry,rz), FBModelTransformationType.kModelRotation, True)
-                    except: pass
-                if not g_state.get('osc_con_ok'):
-                    rb2 = g_state.get('osc_rigid_body')
+                ovr_null = g_state.get('ovr_data_null')
+                if ovr_null:
+                    if g_state.get('is_recording'):
+                        _key_vector(ovr_null.Translation, [tx, ty, tz])
+                        _key_vector(ovr_null.Rotation, [rx, ry, rz])
+                    else:
+                        try: ovr_null.SetVector(FBVector3d(tx,ty,tz), FBModelTransformationType.kModelTranslation, True)
+                        except: pass
+                        try: ovr_null.SetVector(FBVector3d(rx,ry,rz), FBModelTransformationType.kModelRotation, True)
+                        except: pass
+                if not g_state.get('ovr_con_ok'):
+                    rb2 = g_state.get('ovr_rigid_body')
                     if rb2:
                         try:
                             rb2.SetVector(FBVector3d(tx,ty,tz), FBModelTransformationType.kModelTranslation, True)
@@ -965,17 +1104,43 @@ def OnUIIdle(c, e):
                         except: pass
         except: pass
 
-    # ── Per-frame keyframing during recording ──────────────────────────────
-    if g_state['is_recording']:
-        model = g_state['target_model']
-        if model:
-            try:
-                model.Translation.Key()   # Rigid body world position
-                model.Rotation.Key()      # Rigid body world rotation
-            except: pass
-        cam = g_state['camera']
+    # ── OpenVR Controller polling (Zoom/Snapshot/Record) ──────────────
+    if g_state.get('ovr_listening') and g_state.get('ovr_system'):
+        try:
+            vr = g_state['ovr_system']
+            ctrl_dev = int(g_state.get('ovr_ctrl_device', 1))
+            res, cstate = vr.getControllerState(ctrl_dev)
+            if res:
+                # 1. Zoom via Trackpad/Joystick Y-axis (Axis 0)
+                ty = cstate.rAxis[0].y
+                if abs(ty) > 0.1:  # 10% deadzone
+                    _set_fov(g_state['fov'] - ty * 1.5)
+
+                # 2. Buttons (Snapshot / Record)
+                btns = cstate.ulButtonPressed
+                prev_btns = g_state.get('ovr_prev_btns', 0)
+                pressed = btns & ~prev_btns
+                g_state['ovr_prev_btns'] = btns
+                
+                now = time.time()
+                # Trigger (33) -> Snapshot
+                if pressed & (1 << 33):
+                    if now - g_state.get('last_snap_time', 0) > 0.5:
+                        g_state['last_snap_time'] = now
+                        OnSnapshotClick(None, None)
+                
+                # Application Menu (1) -> Record
+                if pressed & (1 << 1):
+                    if now - g_state.get('last_record_time', 0) > 1.0:
+                        g_state['last_record_time'] = now
+                        if 'btn_record' in g_ui: OnRecordClick(g_ui['btn_record'], None)
+        except: pass
+
+    # ── Ensure FOV is continuously keyed during recording ──────────────────
+    if g_state.get('is_recording'):
+        cam = g_state.get('camera')
         if cam:
-            try: cam.FieldOfView.Key()    # VCam FOV
+            try: _key_float(cam.FieldOfView, g_state['fov'])
             except: pass
 
     # ── Gamepad polling ────────────────────────────────────────────────────
@@ -990,24 +1155,56 @@ def OnUIIdle(c, e):
 
     btn     = gp.wButtons
     pressed = btn & ~_prev_btn
-    if pressed & XBTN_RB:    OnSnapshotClick(None, None)
-    if pressed & XBTN_START:
-        if 'btn_record' in g_ui: OnRecordClick(g_ui['btn_record'], None)
     _prev_btn = btn
+
+    now = time.time()
+    if pressed & XBTN_RB:
+        if now - g_state.get('last_snap_time', 0) > 0.5:
+            g_state['last_snap_time'] = now
+            OnSnapshotClick(None, None)
+    if pressed & XBTN_START:
+        if now - g_state.get('last_record_time', 0) > 1.0:
+            g_state['last_record_time'] = now
+            if 'btn_record' in g_ui: OnRecordClick(g_ui['btn_record'], None)
 
 # ── UI ─────────────────────────────────────────────────────────────────────────
 def PopulateTool(tool):
-    tool.StartSizeX = 400
-    tool.StartSizeY = 1000
+    tool.StartSizeX = 250
+    tool.StartSizeY = 750
 
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft,   '')
     y = FBAddRegionParam(0, FBAttachType.kFBAttachTop,    '')
     w = FBAddRegionParam(0, FBAttachType.kFBAttachRight,  '')
     h = FBAddRegionParam(0, FBAttachType.kFBAttachBottom, '')
-    tool.AddRegion('main', 'main', x, y, w, h)
+    
+    y_tab = FBAddRegionParam(25, FBAttachType.kFBAttachNone, '')
+    tool.AddRegion('tab', 'tab', x, y, w, y_tab)
+    
+    tab_panel = FBTabPanel()
+    tab_panel.Items.append('OSC Source')
+    tab_panel.Items.append('OpenVR Source')
+    tab_panel.Items.append('VCam')
+    tool.SetControl('tab', tab_panel)
+    
+    y_status_h = FBAddRegionParam(30, FBAttachType.kFBAttachNone, '')
+    y_status_y = FBAddRegionParam(-30, FBAttachType.kFBAttachBottom, '')
+    tool.AddRegion('status', 'status', x, y_status_y, w, y_status_h)
 
-    g_ui['main_layout'] = FBVBoxLayout()
-    tool.SetControl('main', g_ui['main_layout'])
+    y_content_start = FBAddRegionParam(0, FBAttachType.kFBAttachBottom, 'tab')
+    h_content_end = FBAddRegionParam(0, FBAttachType.kFBAttachTop, 'status')
+    tool.AddRegion('content', 'content', x, y_content_start, w, h_content_end)
+
+    view_osc = FBVBoxLayout()
+    view_ovr = FBVBoxLayout()
+    view_vcam = FBVBoxLayout()
+    tool.SetControl('content', view_osc)
+    
+    def OnTabChange(c, e):
+        if c.ItemIndex == 0: tool.SetControl('content', view_osc)
+        elif c.ItemIndex == 1: tool.SetControl('content', view_ovr)
+        else: tool.SetControl('content', view_vcam)
+        
+    tab_panel.OnChange.Add(OnTabChange)
 
     def hdr(text):
         lbl = FBLabel()
@@ -1023,32 +1220,32 @@ def PopulateTool(tool):
         lbl = FBLabel(); lbl.Caption = axis + ':'
         row.Add(lbl, 22)
         for deg in (-90, -10, 10, 90):
-            row.Add(btn('{:+d}'.format(deg), _make_rot_cb(axis, deg)), 88)
+            row.Add(btn('{:+d}'.format(deg), _make_rot_cb(axis, deg)), 50)
         return row
 
     # ── RIGID BODY SOURCE
     lyt_src = FBHBoxLayout()
     g_ui['list_models']  = FBList()
     g_ui['btn_refresh']  = btn('Refresh', OnRefreshClick)
-    lyt_src.Add(g_ui['list_models'],  268)
-    lyt_src.Add(g_ui['btn_refresh'],   90)
+    lyt_src.Add(g_ui['list_models'],  160)
+    lyt_src.Add(g_ui['btn_refresh'],   70)
 
     g_ui['btn_create'] = btn('Create & Attach Camera', OnCreateCameraClick)
 
     lyt_cam_ctrl = FBHBoxLayout()
-    g_ui['btn_set_active'] = btn('Set Active Camera', OnSetActiveClick)
+    g_ui['btn_set_active'] = btn('Set Active', OnSetActiveClick)
     g_ui['btn_detach']     = btn('Detach', OnDetachClick)
-    g_ui['btn_del_vcam']   = btn('Delete VCam', OnDeleteVCamClick)
-    lyt_cam_ctrl.Add(g_ui['btn_set_active'], 170)
-    lyt_cam_ctrl.Add(g_ui['btn_detach'],      96)
-    lyt_cam_ctrl.Add(g_ui['btn_del_vcam'],    96)
+    g_ui['btn_del_vcam']   = btn('Del VCam', OnDeleteVCamClick)
+    lyt_cam_ctrl.Add(g_ui['btn_set_active'], 100)
+    lyt_cam_ctrl.Add(g_ui['btn_detach'],      65)
+    lyt_cam_ctrl.Add(g_ui['btn_del_vcam'],    65)
 
     # ── OSC SOURCE
     lyt_osc_ip = FBHBoxLayout()
     lbl_osc_ip = FBLabel(); lbl_osc_ip.Caption = 'Bind IP:'
     g_ui['edit_osc_ip'] = FBEdit()
     g_ui['edit_osc_ip'].Text = '0.0.0.0'
-    lyt_osc_ip.Add(lbl_osc_ip, 60); lyt_osc_ip.Add(g_ui['edit_osc_ip'], 300)
+    lyt_osc_ip.Add(lbl_osc_ip, 60); lyt_osc_ip.Add(g_ui['edit_osc_ip'], 170)
 
     lyt_osc_top = FBHBoxLayout()
     lbl_osc_p = FBLabel(); lbl_osc_p.Caption = 'Port:'
@@ -1057,8 +1254,8 @@ def PopulateTool(tool):
     g_ui['edit_osc_port'].Value = 9007; g_ui['edit_osc_port'].Precision = 0
     g_ui['btn_osc_toggle'] = btn('Connect', OnOSCToggleClick)
     lyt_osc_top.Add(lbl_osc_p, 38)
-    lyt_osc_top.Add(g_ui['edit_osc_port'], 90)
-    lyt_osc_top.Add(g_ui['btn_osc_toggle'], 240)
+    lyt_osc_top.Add(g_ui['edit_osc_port'], 60)
+    lyt_osc_top.Add(g_ui['btn_osc_toggle'], 130)
     g_ui['btn_create_osc_rb'] = btn('Create OSC Source & RigidBody', OnCreateOSCRigidBodyClick)
     g_ui['btn_reset_osc_data'] = btn('🔄 Reset OSC Data Null', OnResetOSCDataClick)
 
@@ -1068,12 +1265,26 @@ def PopulateTool(tool):
     lbl_ovr_dev = FBLabel(); lbl_ovr_dev.Caption = 'Device:'
     g_ui['edit_ovr_dev'] = FBEditNumber()
     g_ui['edit_ovr_dev'].Min = 0; g_ui['edit_ovr_dev'].Max = 15
-    g_ui['edit_ovr_dev'].Value = 0; g_ui['edit_ovr_dev'].Precision = 0
+    g_ui['edit_ovr_dev'].Value = 1; g_ui['edit_ovr_dev'].Precision = 0
     g_ui['edit_ovr_dev'].OnChange.Add(OnOVRDeviceChange)
     g_ui['btn_ovr_toggle'] = btn(_ovr_label, OnOVRToggleClick)
-    lyt_ovr.Add(lbl_ovr_dev, 52)
-    lyt_ovr.Add(g_ui['edit_ovr_dev'], 55)
-    lyt_ovr.Add(g_ui['btn_ovr_toggle'], 263)
+    lyt_ovr.Add(lbl_ovr_dev, 50)
+    lyt_ovr.Add(g_ui['edit_ovr_dev'], 45)
+    lyt_ovr.Add(g_ui['btn_ovr_toggle'], 135)
+
+    lyt_ovr_ctrl = FBHBoxLayout()
+    lbl_ovr_ctrl = FBLabel(); lbl_ovr_ctrl.Caption = 'Controller Dev:'
+    g_ui['edit_ovr_ctrl'] = FBEditNumber()
+    g_ui['edit_ovr_ctrl'].Min = 0; g_ui['edit_ovr_ctrl'].Max = 15
+    g_ui['edit_ovr_ctrl'].Value = g_state.get('ovr_ctrl_device', 1)
+    g_ui['edit_ovr_ctrl'].Precision = 0
+    def OnOVRCtrlChange(c, e): g_state['ovr_ctrl_device'] = int(c.Value)
+    g_ui['edit_ovr_ctrl'].OnChange.Add(OnOVRCtrlChange)
+    lyt_ovr_ctrl.Add(lbl_ovr_ctrl, 80)
+    lyt_ovr_ctrl.Add(g_ui['edit_ovr_ctrl'], 45)
+
+    g_ui['btn_create_ovr_rb'] = btn('Create OpenVR Source & RigidBody', OnCreateOVRRigidBodyClick)
+    g_ui['btn_reset_ovr_data'] = btn('🔄 Reset OpenVR Data Null', OnResetOVRDataClick)
 
     # ── MOUNTING OFFSET
     g_ui['btn_reset'] = btn('Reset to +Z (default)', OnResetOffsetClick)
@@ -1097,21 +1308,21 @@ def PopulateTool(tool):
 
     lyt_flip_pos = FBHBoxLayout()
     lbl_fp = FBLabel(); lbl_fp.Caption = 'POS:'
-    lyt_flip_pos.Add(lbl_fp, 38)
+    lyt_flip_pos.Add(lbl_fp, 35)
     for i in range(3):
         sign = '(+)' if _FLIP_DEFAULTS[i] > 0 else '(-)'
         b = btn(_FLIP_NAMES[i] + ' ' + sign, _make_flip_cb(i))
         g_ui['flip_' + _FLIP_NAMES[i].lower()] = b
-        lyt_flip_pos.Add(b, 117)
+        lyt_flip_pos.Add(b, 65)
 
     lyt_flip_rot = FBHBoxLayout()
     lbl_fr = FBLabel(); lbl_fr.Caption = 'ROT:'
-    lyt_flip_rot.Add(lbl_fr, 38)
+    lyt_flip_rot.Add(lbl_fr, 35)
     for i in range(3, 6):
         sign = '(+)' if _FLIP_DEFAULTS[i] > 0 else '(-)'
         b = btn(_FLIP_NAMES[i] + ' ' + sign, _make_flip_cb(i))
         g_ui['flip_' + _FLIP_NAMES[i].lower()] = b
-        lyt_flip_rot.Add(b, 117)
+        lyt_flip_rot.Add(b, 65)
 
     # ── FOV / ZOOM
     lyt_fov = FBHBoxLayout()
@@ -1120,12 +1331,12 @@ def PopulateTool(tool):
     g_ui['edit_fov'].Min = FOV_MIN; g_ui['edit_fov'].Max = FOV_MAX
     g_ui['edit_fov'].Value = g_state['fov']; g_ui['edit_fov'].Precision = 1
     g_ui['edit_fov'].OnChange.Add(OnFOVChange)
-    lyt_fov.Add(lbl_fov, 35); lyt_fov.Add(g_ui['edit_fov'], 320)
+    lyt_fov.Add(lbl_fov, 35); lyt_fov.Add(g_ui['edit_fov'], 195)
 
     lyt_zoom = FBHBoxLayout()
     g_ui['btn_wider']   = btn('Zoom Out', OnZoomOutClick)
     g_ui['btn_tighter'] = btn('Zoom In',  OnZoomInClick)
-    lyt_zoom.Add(g_ui['btn_wider'],  188); lyt_zoom.Add(g_ui['btn_tighter'], 188)
+    lyt_zoom.Add(g_ui['btn_wider'],  115); lyt_zoom.Add(g_ui['btn_tighter'], 115)
 
     lyt_gp = FBHBoxLayout()
     g_ui['chk_gamepad'] = FBButton()
@@ -1138,8 +1349,8 @@ def PopulateTool(tool):
     g_ui['edit_gp_idx'].Min = 0; g_ui['edit_gp_idx'].Max = 3
     g_ui['edit_gp_idx'].Value = 0; g_ui['edit_gp_idx'].Precision = 0
     g_ui['edit_gp_idx'].OnChange.Add(OnGPIndexChange)
-    lyt_gp.Add(g_ui['chk_gamepad'], 200)
-    lyt_gp.Add(lbl_gi, 45); lyt_gp.Add(g_ui['edit_gp_idx'], 65)
+    lyt_gp.Add(g_ui['chk_gamepad'], 140)
+    lyt_gp.Add(lbl_gi, 40); lyt_gp.Add(g_ui['edit_gp_idx'], 50)
 
     # ── CAPTURE
     lyt_snap_path = FBHBoxLayout()
@@ -1147,49 +1358,55 @@ def PopulateTool(tool):
     g_ui['edit_snap_path'] = FBEdit()
     g_ui['edit_snap_path'].Text = os.path.join(os.path.expanduser('~'), 'Desktop')
     g_ui['btn_browse_snap'] = btn('Browse', OnBrowseSnapClick)
-    lyt_snap_path.Add(lbl_sp, 38)
-    lyt_snap_path.Add(g_ui['edit_snap_path'], 230)
-    lyt_snap_path.Add(g_ui['btn_browse_snap'], 90)
+    lyt_snap_path.Add(lbl_sp, 35)
+    lyt_snap_path.Add(g_ui['edit_snap_path'], 130)
+    lyt_snap_path.Add(g_ui['btn_browse_snap'], 65)
 
     lyt_capture = FBHBoxLayout()
     g_ui['btn_record']   = btn('🔴 Record',    OnRecordClick)
     g_ui['btn_snapshot'] = btn('📷 Snapshot',  OnSnapshotClick)
-    lyt_capture.Add(g_ui['btn_record'],   188)
-    lyt_capture.Add(g_ui['btn_snapshot'], 188)
+    lyt_capture.Add(g_ui['btn_record'],   115)
+    lyt_capture.Add(g_ui['btn_snapshot'], 115)
 
     # ── Status
     g_ui['lbl_status'] = FBLabel()
     g_ui['lbl_status'].Caption = 'Status: Ready'
+    tool.SetControl('status', g_ui['lbl_status'])
 
-    # ── Assemble layout
-    lay = g_ui['main_layout']
-    lay.Add(hdr('OSC SOURCE'),              25)
-    lay.Add(lyt_osc_ip,                         30)
-    lay.Add(lyt_osc_top,                        35)
-    lay.Add(g_ui['btn_create_osc_rb'],          35)
-    lay.Add(g_ui['btn_reset_osc_data'],         35)
-    lay.Add(hdr('OPENVR SOURCE'),               25)
-    lay.Add(lyt_ovr,                            35)
-    lay.Add(hdr('RIGID BODY SOURCE'),           25)
-    lay.Add(lyt_src,                            32)
-    lay.Add(g_ui['btn_create'],                 35)
-    lay.Add(lyt_cam_ctrl,                       35)
-    lay.Add(hdr('MOUNTING OFFSET'),             25)
-    lay.Add(g_ui['btn_reset'],            30)
-    lay.Add(g_ui['rot_x'],                30)
-    lay.Add(g_ui['rot_y'],                30)
-    lay.Add(g_ui['rot_z'],                30)
-    lay.Add(hdr('OSC AXIS DIRECTION'),    25)
-    lay.Add(lyt_flip_pos,                 35)
-    lay.Add(lyt_flip_rot,                 35)
-    lay.Add(hdr('ZOOM / FOV'),            25)
-    lay.Add(lyt_fov,                      30)
-    lay.Add(lyt_zoom,                     35)
-    lay.Add(lyt_gp,                       30)
-    lay.Add(hdr('CAPTURE'),               25)
-    lay.Add(lyt_snap_path,                30)
-    lay.Add(lyt_capture,                  35)
-    lay.Add(g_ui['lbl_status'],           30)
+    # ── Assemble layouts
+    view_osc.Add(lyt_osc_ip,                         30)
+    view_osc.Add(lyt_osc_top,                        35)
+    view_osc.Add(g_ui['btn_create_osc_rb'],          35)
+    view_osc.Add(g_ui['btn_reset_osc_data'],         35)
+
+    view_ovr.Add(lyt_ovr,                            35)
+    view_ovr.Add(lyt_ovr_ctrl,                       35)
+    view_ovr.Add(g_ui['btn_create_ovr_rb'],          35)
+    view_ovr.Add(g_ui['btn_reset_ovr_data'],         35)
+
+    view_vcam.Add(hdr('RIGID BODY SOURCE'),           25)
+    view_vcam.Add(lyt_src,                            32)
+    view_vcam.Add(g_ui['btn_create'],                 35)
+    view_vcam.Add(lyt_cam_ctrl,                       35)
+
+    view_vcam.Add(hdr('MOUNTING OFFSET'),             25)
+    view_vcam.Add(g_ui['btn_reset'],            30)
+    view_vcam.Add(g_ui['rot_x'],                30)
+    view_vcam.Add(g_ui['rot_y'],                30)
+    view_vcam.Add(g_ui['rot_z'],                30)
+
+    view_vcam.Add(hdr('OSC AXIS DIRECTION'),    25)
+    view_vcam.Add(lyt_flip_pos,                 35)
+    view_vcam.Add(lyt_flip_rot,                 35)
+
+    view_vcam.Add(hdr('ZOOM / FOV'),            25)
+    view_vcam.Add(lyt_fov,                      30)
+    view_vcam.Add(lyt_zoom,                     35)
+    view_vcam.Add(lyt_gp,                       30)
+
+    view_vcam.Add(hdr('CAPTURE'),               25)
+    view_vcam.Add(lyt_snap_path,                30)
+    view_vcam.Add(lyt_capture,                  35)
 
     # Auto-populate model list
     OnRefreshClick(None, None)
