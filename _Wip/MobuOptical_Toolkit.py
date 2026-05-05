@@ -1,0 +1,261 @@
+"""
+MobuOptical_Toolkit.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Automate Optical Mocap setup for OptiTrack Baseline 37 & Core 50.
+Workflow:
+  Import -> RigidBody -> Create & Fit -> AutoMap -> Active
+
+Version: 1.24 (Clean Workflow)
+由小聖腦絲與 Antigravity 協作完成
+https://www.facebook.com/hysaint3d.mocap
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+print(">>> MobuOptical_Toolkit v1.24 Loading...")
+from pyfbsdk import *
+from pyfbsdk_additions import *
+import sys
+import math
+
+# ── Global Settings & Mapping ──────────────────────────────────────────────────
+
+MAP_37 = {
+    "Head": ["HeadTop", "HeadFront", "HeadSide"],
+    "Chest": ["Chest", "CLAV", "STRN"],
+    "Spine": ["BackTop", "BackLeft", "BackRight", "C7", "T10"],
+    "Hips": ["WaistLFront", "WaistRFront", "WaistLBack", "WaistRBack", "LASI", "RASI", "LPSI", "RPSI"],
+    "LeftShoulder": ["LShoulderTop", "LShoulderBack", "LSHO"],
+    "RightShoulder": ["RShoulderTop", "RShoulderBack", "RSHO"],
+    "LeftArm": ["LUARmHigh", "LELB"],
+    "RightArm": ["RUARmHigh", "RELB"],
+    "LeftForeArm": ["LElbowOut", "LFArm", "LWRA", "LWRB"],
+    "RightForeArm": ["RElbowOut", "RFArm", "RWRA", "RWRB"],
+    "LeftHand": ["LWristOut", "LWristIn", "LHandOut", "LFIN"],
+    "RightHand": ["RWristOut", "RWristIn", "RHandOut", "RFIN"],
+    "LeftUpLeg": ["LThigh", "LKNE", "LTHI"],
+    "RightUpLeg": ["RThigh", "RKNE", "RTHI"],
+    "LeftLeg": ["LKneeOut", "LShin", "LSHN"],
+    "RightLeg": ["RKneeOut", "RShin", "RSHN"],
+    "LeftFoot": ["LAnkleOut", "LToeOut", "LToeIn", "LHEE", "LANK"],
+    "RightFoot": ["RAnkleOut", "RToeOut", "RToeIn", "RHEE", "RANK"],
+}
+
+MAP_50 = MAP_37.copy()
+MAP_50.update({
+    "LeftHandThumb": ["LThumbTip", "LThumbDistal", "LThumbProximal"],
+    "LeftHandIndex": ["LIndexTip", "LIndexDistal", "LIndexProximal"],
+    "LeftHandMiddle": ["LMiddleTip", "LMiddleDistal", "LMiddleProximal"],
+    "LeftHandRing": ["LRingTip", "LRingDistal", "LRingProximal"],
+    "LeftHandPinky": ["LPinkyTip", "LPinkyDistal", "LPinkyProximal"],
+    "RightHandThumb": ["RThumbTip", "RThumbDistal", "RThumbProximal"],
+    "RightHandIndex": ["RIndexTip", "RIndexDistal", "RIndexProximal"],
+    "RightHandMiddle": ["RMiddleTip", "RMiddleDistal", "RMiddleProximal"],
+    "RightHandRing": ["RRingTip", "RRingDistal", "RRingProximal"],
+    "RightHandPinky": ["RPinkyTip", "RPinkyDistal", "RPinkyProximal"],
+})
+
+RIGID_GROUPS = {
+    "Head": ["HeadTop", "HeadFront", "HeadSide"],
+    "Torso": ["BackTop", "Chest", "BackLeft", "BackRight", "C7", "T10"],
+    "Hips": ["WaistLFront", "WaistRFront", "WaistLBack", "WaistRBack"],
+}
+
+g_ui = {}
+
+def status(msg):
+    try: g_ui["lbl_status"].Caption = "Status: " + msg
+    except: pass
+
+def set_prop(obj, name, val):
+    p = obj.PropertyList.Find(name)
+    if not p:
+        for _p in obj.PropertyList:
+            if name.lower() in _p.Name.lower():
+                p = _p; break
+    if p:
+        try: p.Data = val; return True
+        except: pass
+    return False
+
+def get_optical_roots():
+    roots = []
+    for comp in FBSystem().Scene.Components:
+        if isinstance(comp, FBModelOptical):
+            roots.append(comp)
+    return roots
+
+# ── Actions ────────────────────────────────────────────────────────────────────
+
+def OnImportClick(control, event):
+    file_popup = FBFilePopup()
+    file_popup.Style = FBFilePopupStyle.kFBFilePopupOpen
+    file_popup.Filter = "*.c3d;*.trc"; file_popup.Caption = "Select Optical Data"
+    if file_popup.Execute():
+        FBApplication().FileImport(file_popup.FullFilename)
+        status("Imported: " + file_popup.FileName)
+
+def OnCreateRigidClick(control, event):
+    roots = get_optical_roots()
+    if not roots: status("No Optical Data!"); return
+    optical = roots[0]; created = 0
+    for g_name, m_names in RIGID_GROUPS.items():
+        mlist = [m for m in optical.Children if m.Name.split(":")[-1] in m_names]
+        if len(mlist) >= 3:
+            if optical.CreateRigidBody(g_name, mlist): created += 1
+    status(f"Created {created} Rigid Bodies.")
+
+def OnCreateAndFitClick(control, event):
+    # 1. Ensure Actor exists
+    actor_name = "Optical_Actor"
+    actor = next((a for a in FBSystem().Scene.Actors if a.Name == actor_name), None)
+    if not actor: actor = FBActor(actor_name)
+    
+    roots = get_optical_roots()
+    if not roots: status("No Optical Data!"); return
+    optical = roots[0]
+    
+    # 2. Analyze Optical Markers
+    max_y = -100000.0; min_y = 100000.0
+    waist_markers = []; pts = {}
+    for marker in optical.Children:
+        p = FBVector3d(); marker.GetVector(p)
+        if p[1] > max_y: max_y = p[1]
+        if p[1] < min_y: min_y = p[1]
+        name = marker.Name.split(":")[-1]; pts[name] = p
+        if "Waist" in name: waist_markers.append(p)
+    
+    def dist(p1, p2):
+        return math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2 + (p1[2]-p2[2])**2) if p1 and p2 else None
+
+    # 3. Positioning & Scaling (Fuzzy Search for properties)
+    actor.Selected = True
+    
+    # Scale Height first
+    height = max_y - min_y
+    if height > 50.0: set_prop(actor, "Height", height)
+    
+    if waist_markers:
+        avg_x = sum(p[0] for p in waist_markers) / len(waist_markers)
+        avg_y = sum(p[1] for p in waist_markers) / len(waist_markers)
+        avg_z = sum(p[2] for p in waist_markers) / len(waist_markers)
+        
+        # Move Actor root to horizontal center and ground
+        try:
+            actor.SetActorTranslation(FBVector3d(avg_x, min_y, avg_z))
+        except:
+            set_prop(actor, "Translation", FBVector3d(avg_x, min_y, avg_z))
+        
+        # Aggressive search for Hips Height
+        hips_h = avg_y - min_y
+        found_hips = False
+        for p in actor.PropertyList:
+            p_low = p.Name.lower()
+            if "hip" in p_low and "height" in p_low:
+                p.Data = hips_h
+                print(f">>> Found & Set Hip Height: {p.Name} = {hips_h}")
+                found_hips = True
+        if not found_hips: set_prop(actor, "HipsHeight", hips_h)
+
+    # Scale Other Limbs
+    l_sho = pts.get("LShoulderTop"); r_sho = pts.get("RShoulderTop")
+    if l_sho: set_prop(actor, "ShoulderHeight", l_sho[1] - min_y)
+    if l_sho and r_sho: set_prop(actor, "ShoulderWidth", abs(l_sho[0] - r_sho[0]))
+    
+    l_elb = pts.get("LElbowOut"); l_wri = pts.get("LWristOut")
+    if l_sho and l_elb: set_prop(actor, "ArmLength", dist(l_sho, l_elb))
+    if l_elb and l_wri: set_prop(actor, "ForearmLength", dist(l_elb, l_wri))
+    
+    l_kne = pts.get("LKneeOut"); l_ank = pts.get("LAnkleOut")
+    l_waist_ref = pts.get("WaistLFront") or pts.get("LASI")
+    if l_waist_ref and l_kne: set_prop(actor, "UpperLegLength", dist(l_waist_ref, l_kne))
+    if l_kne and l_ank: set_prop(actor, "LowerLegLength", dist(l_kne, l_ank))
+
+    FBSystem().Scene.Evaluate()
+    status("Actor Created & Fitted.")
+
+def OnAutoMapClick(control, event):
+    actor = next((a for a in FBSystem().Scene.Actors if a.Name == "Optical_Actor"), None)
+    roots = get_optical_roots()
+    if not actor or not roots: status("Missing Actor/Data!"); return
+    optical = roots[0]
+    
+    ms_name = "Optical_MarkerSet"
+    markerset = next((ms for ms in FBSystem().Scene.MarkerSets if ms.Name == ms_name), None)
+    if not markerset: markerset = FBMarkerSet(ms_name)
+    actor.MarkerSet = markerset
+    
+    for p in markerset.PropertyList:
+        if hasattr(p, "removeAll"): p.removeAll()
+    
+    template_idx = g_ui["list_template"].ItemIndex
+    mapping = MAP_37 if template_idx == 0 else MAP_50
+    match_count = 0
+    
+    ID_MAP = {
+        "Head": FBSkeletonNodeId.kFBSkeletonHeadIndex, "Chest": FBSkeletonNodeId.kFBSkeletonChestIndex,
+        "Spine": FBSkeletonNodeId.kFBSkeletonWaistIndex, "Hips": FBSkeletonNodeId.kFBSkeletonHipsIndex,
+        "LeftShoulder": FBSkeletonNodeId.kFBSkeletonLeftCollarIndex, "RightShoulder": FBSkeletonNodeId.kFBSkeletonRightCollarIndex,
+        "LeftArm": FBSkeletonNodeId.kFBSkeletonLeftShoulderIndex, "RightArm": FBSkeletonNodeId.kFBSkeletonRightShoulderIndex,
+        "LeftForeArm": FBSkeletonNodeId.kFBSkeletonLeftElbowIndex, "RightForeArm": FBSkeletonNodeId.kFBSkeletonRightElbowIndex,
+        "LeftHand": FBSkeletonNodeId.kFBSkeletonLeftWristIndex, "RightHand": FBSkeletonNodeId.kFBSkeletonRightWristIndex,
+        "LeftUpLeg": FBSkeletonNodeId.kFBSkeletonLeftHipIndex, "RightUpLeg": FBSkeletonNodeId.kFBSkeletonRightHipIndex,
+        "LeftLeg": FBSkeletonNodeId.kFBSkeletonLeftKneeIndex, "RightLeg": FBSkeletonNodeId.kFBSkeletonRightKneeIndex,
+        "LeftFoot": FBSkeletonNodeId.kFBSkeletonLeftAnkleIndex, "RightFoot": FBSkeletonNodeId.kFBSkeletonRightAnkleIndex,
+    }
+
+    for slot_name, potential_names in mapping.items():
+        node_id = ID_MAP.get(slot_name)
+        if node_id is not None:
+            for marker in optical.Children:
+                if marker.Name.split(":")[-1] in potential_names:
+                    try: markerset.AddMarker(node_id, marker); match_count += 1
+                    except: pass
+    FBSystem().Scene.Evaluate(); status(f"Mapped {match_count} markers.")
+
+def OnActivateClick(control, event):
+    actor = next((a for a in FBSystem().Scene.Actors if a.Name == "Optical_Actor"), None)
+    if actor: set_prop(actor, "Active", True); status("Actor Activated.")
+
+def OnResetClick(control, event):
+    for a in list(FBSystem().Scene.Actors):
+        if a.Name == "Optical_Actor": a.FBDelete()
+    for ms in list(FBSystem().Scene.MarkerSets):
+        if ms.Name == "Optical_MarkerSet": ms.FBDelete()
+    status("Scene Reset.")
+
+# ── UI Construction ───────────────────────────────────────────────────────────
+
+def PopulateTool(tool):
+    tool.StartSizeX = 260; tool.StartSizeY = 500
+    lyt = FBVBoxLayout()
+    x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft, ""); y = FBAddRegionParam(0, FBAttachType.kFBAttachTop, "")
+    w = FBAddRegionParam(0, FBAttachType.kFBAttachRight, ""); h = FBAddRegionParam(0, FBAttachType.kFBAttachBottom, "")
+    tool.AddRegion("main", "main", x, y, w, h); tool.SetControl("main", lyt)
+    
+    def btn(txt, fn): b = FBButton(); b.Caption = txt; b.OnClick.Add(fn); return b
+    def lbl(txt): l = FBLabel(); l.Caption = txt; return l
+
+    lyt.Add(lbl("1. Data Management"), 20)
+    lyt.Add(btn("Import Optical Data", OnImportClick), 35)
+    lyt.Add(btn("Create Rigid Bodies", OnCreateRigidClick), 35)
+    
+    lyt.Add(lbl("2. Actor Setup"), 20)
+    lyt.Add(btn("Create & Fit Actor", OnCreateAndFitClick), 45)
+    
+    lyt.Add(lbl("3. Mapping & Solving"), 20)
+    lyt_temp = FBHBoxLayout(); lyt_temp.Add(lbl("Template:"), 60)
+    g_ui["list_template"] = FBList()
+    g_ui["list_template"].Items.append("Baseline 37"); g_ui["list_template"].Items.append("Core 50"); g_ui["list_template"].ItemIndex = 0
+    lyt_temp.Add(g_ui["list_template"], 140); lyt.Add(lyt_temp, 25)
+    
+    lyt.Add(btn("Auto-Map MarkerSet", OnAutoMapClick), 40)
+    lyt.Add(btn("Activate Mapping", OnActivateClick), 40)
+    
+    lyt.Add(lbl("---"), 15)
+    lyt.Add(btn("Reset / Delete All", OnResetClick), 35)
+    
+    g_ui["lbl_status"] = FBLabel(); g_ui["lbl_status"].Caption = "Status: Ready."; lyt.Add(g_ui["lbl_status"], 30)
+
+def CreateTool():
+    t = FBCreateUniqueTool("MobuOptical_Toolkit")
+    if t: PopulateTool(t); ShowTool(t)
+CreateTool()
