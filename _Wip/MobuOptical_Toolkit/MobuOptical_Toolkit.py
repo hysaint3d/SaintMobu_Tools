@@ -16,48 +16,55 @@ from pyfbsdk_additions import *
 import sys
 import math
 
+import os
+import json
+
 # ── Global Settings & Mapping ──────────────────────────────────────────────────
+g_ui = {}
+g_templates = []
 
-MAP_37 = {
-    "Head": ["HeadTop", "HeadFront", "HeadSide"],
-    "Chest": ["Chest", "CLAV", "STRN"],
-    "Spine": ["BackTop", "BackLeft", "BackRight", "C7", "T10"],
-    "Hips": ["WaistLFront", "WaistRFront", "WaistLBack", "WaistRBack", "LASI", "RASI", "LPSI", "RPSI"],
-    "LeftShoulder": ["LShoulderTop", "LShoulderBack", "LSHO"],
-    "RightShoulder": ["RShoulderTop", "RShoulderBack", "RSHO"],
-    "LeftArm": ["LUARmHigh", "LELB"],
-    "RightArm": ["RUARmHigh", "RELB"],
-    "LeftForeArm": ["LElbowOut", "LFArm", "LWRA", "LWRB"],
-    "RightForeArm": ["RElbowOut", "RFArm", "RWRA", "RWRB"],
-    "LeftHand": ["LWristOut", "LWristIn", "LHandOut", "LFIN"],
-    "RightHand": ["RWristOut", "RWristIn", "RHandOut", "RFIN"],
-    "LeftUpLeg": ["LThigh", "LKNE", "LTHI"],
-    "RightUpLeg": ["RThigh", "RKNE", "RTHI"],
-    "LeftLeg": ["LKneeOut", "LShin", "LSHN"],
-    "RightLeg": ["RKneeOut", "RShin", "RSHN"],
-    "LeftFoot": ["LAnkleOut", "LToeOut", "LToeIn", "LHEE", "LANK"],
-    "RightFoot": ["RAnkleOut", "RToeOut", "RToeIn", "RHEE", "RANK"],
+ID_MAP = {
+    "Head": FBSkeletonNodeId.kFBSkeletonHeadIndex, "Chest": FBSkeletonNodeId.kFBSkeletonChestIndex,
+    "Spine": FBSkeletonNodeId.kFBSkeletonWaistIndex, "Hips": FBSkeletonNodeId.kFBSkeletonHipsIndex,
+    "LeftShoulder": FBSkeletonNodeId.kFBSkeletonLeftCollarIndex, "RightShoulder": FBSkeletonNodeId.kFBSkeletonRightCollarIndex,
+    "LeftArm": FBSkeletonNodeId.kFBSkeletonLeftShoulderIndex, "RightArm": FBSkeletonNodeId.kFBSkeletonRightShoulderIndex,
+    "LeftForeArm": FBSkeletonNodeId.kFBSkeletonLeftElbowIndex, "RightForeArm": FBSkeletonNodeId.kFBSkeletonRightElbowIndex,
+    "LeftHand": FBSkeletonNodeId.kFBSkeletonLeftWristIndex, "RightHand": FBSkeletonNodeId.kFBSkeletonRightWristIndex,
+    "LeftUpLeg": FBSkeletonNodeId.kFBSkeletonLeftHipIndex, "RightUpLeg": FBSkeletonNodeId.kFBSkeletonRightHipIndex,
+    "LeftLeg": FBSkeletonNodeId.kFBSkeletonLeftKneeIndex, "RightLeg": FBSkeletonNodeId.kFBSkeletonRightKneeIndex,
+    "LeftFoot": FBSkeletonNodeId.kFBSkeletonLeftAnkleIndex, "RightFoot": FBSkeletonNodeId.kFBSkeletonRightAnkleIndex,
 }
 
-MAP_50 = MAP_37.copy()
-MAP_50.update({
-    "LeftHandThumb": ["LThumbTip", "LThumbDistal", "LThumbProximal"],
-    "LeftHandIndex": ["LIndexTip", "LIndexDistal", "LIndexProximal"],
-    "LeftHandMiddle": ["LMiddleTip", "LMiddleDistal", "LMiddleProximal"],
-    "LeftHandRing": ["LRingTip", "LRingDistal", "LRingProximal"],
-    "LeftHandPinky": ["LPinkyTip", "LPinkyDistal", "LPinkyProximal"],
-    "RightHandThumb": ["RThumbTip", "RThumbDistal", "RThumbProximal"],
-    "RightHandIndex": ["RIndexTip", "RIndexDistal", "RIndexProximal"],
-    "RightHandMiddle": ["RMiddleTip", "RMiddleDistal", "RMiddleProximal"],
-    "RightHandRing": ["RRingTip", "RRingDistal", "RRingProximal"],
-    "RightHandPinky": ["RPinkyTip", "RPinkyDistal", "RPinkyProximal"],
-})
+# Dynamically add finger indices to ID_MAP
+for side in ["Left", "Right"]:
+    for finger in ["Thumb", "Index", "Middle", "Ring", "Pinky"]:
+        for i in range(1, 5):
+            key = "{side}Hand{finger}{i}".format(side=side, finger=finger, i=i)
+            attr_name = "kFBSkeleton{}Index".format(key)
+            if hasattr(FBSkeletonNodeId, attr_name):
+                ID_MAP[key] = getattr(FBSkeletonNodeId, attr_name)
 
-RIGID_GROUPS = {
-    "Head": ["HeadTop", "HeadFront", "HeadSide"],
-    "Torso": ["BackTop", "Chest", "BackLeft", "BackRight", "C7", "T10"],
-    "Hips": ["WaistLFront", "WaistRFront", "WaistLBack", "WaistRBack"],
-}
+def load_templates():
+    global g_templates
+    g_templates = []
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+    except:
+        script_dir = r"c:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\_Wip\MobuOptical_Toolkit"
+    
+    template_dir = os.path.join(script_dir, "Templates")
+    if not os.path.exists(template_dir):
+        return
+        
+    for f in os.listdir(template_dir):
+        if f.endswith(".json"):
+            try:
+                with open(os.path.join(template_dir, f), "r") as jf:
+                    data = json.load(jf)
+                    if "TemplateName" in data:
+                        g_templates.append(data)
+            except Exception as e:
+                print("Error loading {}: {}".format(f, e))
 
 g_ui = {}
 
@@ -97,11 +104,19 @@ def OnCreateRigidClick(control, event):
     roots = get_optical_roots()
     if not roots: status("No Optical Data!"); return
     optical = roots[0]; created = 0
-    for g_name, m_names in RIGID_GROUPS.items():
+    
+    idx = g_ui["list_template"].ItemIndex
+    if idx < 0 or idx >= len(g_templates):
+        status("Select a template first."); return
+        
+    template = g_templates[idx]
+    rigid_groups = template.get("RigidBodies", {})
+    
+    for g_name, m_names in rigid_groups.items():
         mlist = [m for m in optical.Children if m.Name.split(":")[-1] in m_names]
         if len(mlist) >= 3:
             if optical.CreateRigidBody(g_name, mlist): created += 1
-    status(f"Created {created} Rigid Bodies.")
+    status("Created {} Rigid Bodies.".format(created))
 
 def OnCreateAndFitClick(control, event):
     # 1. Ensure Actor exists
@@ -113,6 +128,16 @@ def OnCreateAndFitClick(control, event):
     if not roots: status("No Optical Data!"); return
     optical = roots[0]
     
+    idx = g_ui["list_template"].ItemIndex
+    if idx < 0 or idx >= len(g_templates):
+        status("Select a template first."); return
+    template = g_templates[idx]
+    
+    # Get hip marker names from template
+    hip_names = template.get("ActorMapping", {}).get("Hips", [])
+    if not hip_names:
+        hip_names = ["WaistLFront", "WaistRFront", "WaistLBack", "WaistRBack", "LASI", "RASI", "LPSI", "RPSI"]
+    
     # 2. Analyze Optical Markers
     max_y = -100000.0; min_y = 100000.0
     waist_markers = []; pts = {}
@@ -121,7 +146,9 @@ def OnCreateAndFitClick(control, event):
         if p[1] > max_y: max_y = p[1]
         if p[1] < min_y: min_y = p[1]
         name = marker.Name.split(":")[-1]; pts[name] = p
-        if "Waist" in name: waist_markers.append(p)
+        
+        if name in hip_names or "Waist" in name or "ASI" in name or "PSI" in name:
+            waist_markers.append(p)
     
     def dist(p1, p2):
         return math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2 + (p1[2]-p2[2])**2) if p1 and p2 else None
@@ -129,7 +156,7 @@ def OnCreateAndFitClick(control, event):
     # 3. Positioning & Scaling (Fuzzy Search for properties)
     actor.Selected = True
     
-    # Scale Height first
+    # Scale Height first (Optional, but good for base scale)
     height = max_y - min_y
     if height > 50.0: set_prop(actor, "Height", height)
     
@@ -138,22 +165,25 @@ def OnCreateAndFitClick(control, event):
         avg_y = sum(p[1] for p in waist_markers) / len(waist_markers)
         avg_z = sum(p[2] for p in waist_markers) / len(waist_markers)
         
-        # Move Actor root to horizontal center and ground
-        try:
-            actor.SetActorTranslation(FBVector3d(avg_x, min_y, avg_z))
-        except:
-            set_prop(actor, "Translation", FBVector3d(avg_x, min_y, avg_z))
+        # 暫時不移動 Actor 的位置，將其保持在原點 (0,0,0)
+        # try:
+        #     actor.SetActorTranslation(FBVector3d(avg_x, min_y, avg_z))
+        # except:
+        #     set_prop(actor, "Translation", FBVector3d(avg_x, min_y, avg_z))
         
-        # Aggressive search for Hips Height
-        hips_h = avg_y - min_y
+        # Hips Height 暫時維持絕對高度計算，以便稍後找問題
+        hips_h = avg_y
+        
         found_hips = False
         for p in actor.PropertyList:
             p_low = p.Name.lower()
             if "hip" in p_low and "height" in p_low:
                 p.Data = hips_h
-                print(f">>> Found & Set Hip Height: {p.Name} = {hips_h}")
+                print(">>> Found & Set Hip Height: {} = {}".format(p.Name, hips_h))
                 found_hips = True
-        if not found_hips: set_prop(actor, "HipsHeight", hips_h)
+        if not found_hips: 
+            set_prop(actor, "Hips Height", hips_h)
+            set_prop(actor, "HipsHeight", hips_h)
 
     # Scale Other Limbs
     l_sho = pts.get("LShoulderTop"); r_sho = pts.get("RShoulderTop")
@@ -187,21 +217,12 @@ def OnAutoMapClick(control, event):
         if hasattr(p, "removeAll"): p.removeAll()
     
     template_idx = g_ui["list_template"].ItemIndex
-    mapping = MAP_37 if template_idx == 0 else MAP_50
+    if template_idx < 0 or template_idx >= len(g_templates):
+        status("Select a template first."); return
+        
+    mapping = g_templates[template_idx].get("ActorMapping", {})
     match_count = 0
     
-    ID_MAP = {
-        "Head": FBSkeletonNodeId.kFBSkeletonHeadIndex, "Chest": FBSkeletonNodeId.kFBSkeletonChestIndex,
-        "Spine": FBSkeletonNodeId.kFBSkeletonWaistIndex, "Hips": FBSkeletonNodeId.kFBSkeletonHipsIndex,
-        "LeftShoulder": FBSkeletonNodeId.kFBSkeletonLeftCollarIndex, "RightShoulder": FBSkeletonNodeId.kFBSkeletonRightCollarIndex,
-        "LeftArm": FBSkeletonNodeId.kFBSkeletonLeftShoulderIndex, "RightArm": FBSkeletonNodeId.kFBSkeletonRightShoulderIndex,
-        "LeftForeArm": FBSkeletonNodeId.kFBSkeletonLeftElbowIndex, "RightForeArm": FBSkeletonNodeId.kFBSkeletonRightElbowIndex,
-        "LeftHand": FBSkeletonNodeId.kFBSkeletonLeftWristIndex, "RightHand": FBSkeletonNodeId.kFBSkeletonRightWristIndex,
-        "LeftUpLeg": FBSkeletonNodeId.kFBSkeletonLeftHipIndex, "RightUpLeg": FBSkeletonNodeId.kFBSkeletonRightHipIndex,
-        "LeftLeg": FBSkeletonNodeId.kFBSkeletonLeftKneeIndex, "RightLeg": FBSkeletonNodeId.kFBSkeletonRightKneeIndex,
-        "LeftFoot": FBSkeletonNodeId.kFBSkeletonLeftAnkleIndex, "RightFoot": FBSkeletonNodeId.kFBSkeletonRightAnkleIndex,
-    }
-
     for slot_name, potential_names in mapping.items():
         node_id = ID_MAP.get(slot_name)
         if node_id is not None:
@@ -209,7 +230,7 @@ def OnAutoMapClick(control, event):
                 if marker.Name.split(":")[-1] in potential_names:
                     try: markerset.AddMarker(node_id, marker); match_count += 1
                     except: pass
-    FBSystem().Scene.Evaluate(); status(f"Mapped {match_count} markers.")
+    FBSystem().Scene.Evaluate(); status("Mapped {} markers.".format(match_count))
 
 def OnActivateClick(control, event):
     actor = next((a for a in FBSystem().Scene.Actors if a.Name == "Optical_Actor"), None)
@@ -244,7 +265,15 @@ def PopulateTool(tool):
     lyt.Add(lbl("3. Mapping & Solving"), 20)
     lyt_temp = FBHBoxLayout(); lyt_temp.Add(lbl("Template:"), 60)
     g_ui["list_template"] = FBList()
-    g_ui["list_template"].Items.append("Baseline 37"); g_ui["list_template"].Items.append("Core 50"); g_ui["list_template"].ItemIndex = 0
+    
+    load_templates()
+    for tmpl in g_templates:
+        g_ui["list_template"].Items.append(tmpl.get("TemplateName", "Unknown"))
+    if g_templates:
+        g_ui["list_template"].ItemIndex = 0
+    else:
+        g_ui["list_template"].Items.append("No templates found")
+        
     lyt_temp.Add(g_ui["list_template"], 140); lyt.Add(lyt_temp, 25)
     
     lyt.Add(btn("Auto-Map MarkerSet", OnAutoMapClick), 40)
