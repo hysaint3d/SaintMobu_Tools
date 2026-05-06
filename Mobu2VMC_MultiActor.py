@@ -33,6 +33,7 @@ class Mobu2VMCState:
         self.target_port    = 39539 + (actor_id - 1)
         self.bone_cache     = {}
         self.root_cache     = None
+        self.prop_data      = []     # New: List of {"model": FBModel, "port": int}
         self.frame_count    = 0
         self.fps_limit      = 30
         self.last_send_time = 0.0
@@ -48,7 +49,7 @@ if hasattr(sys, "mobu2vmc_multiactor_states") and sys.mobu2vmc_multiactor_states
             try: state.sock.close()
             except: pass
 
-sys.mobu2vmc_multiactor_states = {1: Mobu2VMCState(1), 2: Mobu2VMCState(2), 3: Mobu2VMCState(3)}
+sys.mobu2vmc_multiactor_states = {1: Mobu2VMCState(1), 2: Mobu2VMCState(2), 3: Mobu2VMCState(3), 4: Mobu2VMCState(4)}
 g_sender_states = sys.mobu2vmc_multiactor_states
 g_ui = {}
 
@@ -511,42 +512,76 @@ def OnSendUIIdle(control, event):
         target = (state.target_ip, state.target_port)
         sent   = 0
 
-        root_px, root_pz = 0.0, 0.0
-        if "Hips" in state.bone_cache:
-            hip_global = FBVector3d()
-            state.bone_cache["Hips"].GetVector(hip_global, FBModelTransformationType.kModelTranslation, True)
-            root_px = -hip_global[0] / 100.0
-            root_pz =  hip_global[2] / 100.0
-            
-        root_px *= state.hip_scale_x
-        root_pz *= state.hip_scale_z
-
-        state.sock.sendto(
-            encode_bone_msg("/VMC/Ext/Root/Pos","root",root_px,0.0,root_pz,0,0,0,1), target)
-        sent += 1
-
-        for bone_name, model in state.bone_cache.items():
-            try:
-                px,py,pz,qx,qy,qz,qw = mb_to_vmc(model, state)
-                if bone_name == "Hips":
-                    px = 0.0
-                    pz = 0.0
-                else:
-                    px, py, pz = 0.0, 0.0, 0.0
+        if act_id == 4:
+            for item in state.prop_data:
+                try:
+                    model = item["model"]
+                    port  = item["port"]
+                    p_target = (state.target_ip, port)
                     
-                state.sock.sendto(
-                    encode_bone_msg("/VMC/Ext/Bone/Pos",bone_name,px,py,pz,qx,qy,qz,qw), target)
-                sent += 1
-            except: pass
+                    pos = FBVector3d()
+                    rot = FBVector3d()
+                    model.GetVector(pos, FBModelTransformationType.kModelTranslation, True)
+                    model.GetVector(rot, FBModelTransformationType.kModelRotation,    True)
+                    
+                    px = -pos[0] / 100.0
+                    py =  pos[1] / 100.0
+                    pz =  pos[2] / 100.0
+                    qx, qy, qz, qw = euler_to_quat(rot[0], rot[1], rot[2])
+                    # X inversion
+                    qx = -qx; qw = -qw
+                    
+                    # Standard Tracker msg
+                    state.sock.sendto(
+                        encode_bone_msg("/VMC/Ext/Tra/Pos", model.Name, px, py, pz, qx, qy, qz, qw), p_target)
+                    
+                    # Root Hack: Send as Root for easy Warudo mapping
+                    state.sock.sendto(
+                        encode_bone_msg("/VMC/Ext/Root/Pos", "root", px, py, pz, qx, qy, qz, qw), p_target)
+                        
+                    sent += 1
+                except: pass
+        else:
+            root_px, root_pz = 0.0, 0.0
+            if "Hips" in state.bone_cache:
+                hip_global = FBVector3d()
+                state.bone_cache["Hips"].GetVector(hip_global, FBModelTransformationType.kModelTranslation, True)
+                root_px = -hip_global[0] / 100.0
+                root_pz =  hip_global[2] / 100.0
+                
+            root_px *= state.hip_scale_x
+            root_pz *= state.hip_scale_z
+
+            state.sock.sendto(
+                encode_bone_msg("/VMC/Ext/Root/Pos","root",root_px,0.0,root_pz,0,0,0,1), target)
+            sent += 1
+
+            for bone_name, model in state.bone_cache.items():
+                try:
+                    px,py,pz,qx,qy,qz,qw = mb_to_vmc(model, state)
+                    if bone_name == "Hips":
+                        px = 0.0
+                        pz = 0.0
+                    else:
+                        px, py, pz = 0.0, 0.0, 0.0
+                        
+                    state.sock.sendto(
+                        encode_bone_msg("/VMC/Ext/Bone/Pos",bone_name,px,py,pz,qx,qy,qz,qw), target)
+                    sent += 1
+                except: pass
 
         state.frame_count += 1
         
     act_id = current_actor()
     act_state = g_sender_states[act_id]
     if act_state.is_connected:
-        g_ui["lbl_status"].Caption = "Actor {} Sending: {} msgs @ {}fps -> {}:{}".format(
-            act_id, len(act_state.bone_cache) + 1, act_state.fps_limit,
-            act_state.target_ip, act_state.target_port)
+        if act_id == 4:
+            g_ui["lbl_status"].Caption = "Props Sending: {} items @ {}fps -> {}".format(
+                len(act_state.prop_data), act_state.fps_limit, act_state.target_ip)
+        else:
+            g_ui["lbl_status"].Caption = "Actor {} Sending: {} msgs @ {}fps -> {}:{}".format(
+                act_id, len(act_state.bone_cache) + 1, act_state.fps_limit,
+                act_state.target_ip, act_state.target_port)
     else:
         g_ui["lbl_status"].Caption = "Actor {} Status: Stopped".format(act_id)
 
@@ -574,6 +609,54 @@ def OnScanClick(control, event):
     for b in sorted(bones.keys()): lines.append("  [Bone]  VMC{}:VMC_".format(act_id) + b)
     FBMessageBox("Scan Result", "\n".join(lines), "OK")
 
+# ── Props Manager ─────────────────────────────────────────────────────────────
+def _refresh_props_list():
+    if "list_props" not in g_ui: return
+    g_ui["list_props"].Items.removeAll()
+    state = g_sender_states[4]
+    for item in state.prop_data:
+        try:
+            m = item["model"]
+            p = item["port"]
+            g_ui["list_props"].Items.append("[{}] {}".format(p, m.Name))
+        except: pass
+
+def OnAddPropsClick(control, event):
+    act_id = current_actor()
+    state = g_sender_states[act_id]
+    if act_id != 4: return
+    
+    try:
+        target_port = int(g_ui["edit_prop_port"].Text.strip())
+    except:
+        FBMessageBox("Error", "Invalid Port number.", "OK")
+        return
+        
+    selected = [m for m in FBSystem().Scene.Components if isinstance(m, FBModel) and m.Selected]
+    added = 0
+    for m in selected:
+        # Check if already exists (can update port if needed)
+        exists = False
+        for item in state.prop_data:
+            if item["model"] == m:
+                item["port"] = target_port
+                exists = True
+                break
+        if not exists:
+            state.prop_data.append({"model": m, "port": target_port})
+            added += 1
+            
+    _refresh_props_list()
+    if added > 0: FBMessageBox("Props Added", "Added {} new prop(s) at port {}.".format(added, target_port), "OK")
+    else: FBMessageBox("Props Updated", "Updated port for selected props to {}.".format(target_port), "OK")
+
+def OnClearPropsClick(control, event):
+    act_id = current_actor()
+    state = g_sender_states[act_id]
+    if act_id != 4: return
+    state.prop_data = []
+    _refresh_props_list()
+
 def OnActorChange(control, event):
     act_id = current_actor()
     state = g_sender_states[act_id]
@@ -582,6 +665,13 @@ def OnActorChange(control, event):
     g_ui["slider_hip_x"].Value = state.hip_scale_x
     g_ui["slider_hip_z"].Value = state.hip_scale_z
     set_fps(state.fps_limit)
+    
+    is_props = (act_id == 4)
+    _rebuild_layout()
+
+    if is_props:
+        _refresh_props_list()
+
     if state.is_connected:
         g_ui["btn_stream"].Caption = "Stop Sending"
         g_ui["lbl_status"].Caption = "Actor {} Sending to {}:{}".format(
@@ -596,25 +686,36 @@ def OnToggleSendClick(control, event):
     
     if not state.is_connected:
         # Start Sending logic
-        root_model, bones = scan_vmc_bones(act_id)
-        if not root_model and not bones:
-            FBMessageBox("Warning",
-                "No VMC_ skeleton found for Actor {}!\n".format(act_id) +
-                "Please use 'Generate Skeleton' first.", "OK")
-            return
+        if act_id == 4:
+            if not state.prop_data:
+                FBMessageBox("Warning", "No props added to send. Add some models first.", "OK")
+                return
+            state.bone_cache = {}
+            state.root_cache = None
+        else:
+            root_model, bones = scan_vmc_bones(act_id)
+            if not root_model and not bones:
+                FBMessageBox("Warning",
+                    "No VMC_ skeleton found for Actor {}!\n".format(act_id) +
+                    "Please use 'Generate Skeleton' first.", "OK")
+                return
+            state.root_cache  = root_model
+            state.bone_cache  = bones
+            
         try:
             state.target_ip   = g_ui["edit_ip"].Text
             state.target_port = int(g_ui["edit_port"].Text.strip())
-            state.root_cache  = root_model
-            state.bone_cache  = bones
             state.sock        = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             state.is_connected = True
             state.frame_count = 0
             state.last_send_time = 0.0
 
             g_ui["btn_stream"].Caption = "Stop Sending"
-            g_ui["lbl_status"].Caption = "Actor {} Sending to {}:{} ({} bones)".format(
-                act_id, state.target_ip, state.target_port, len(bones))
+            if act_id == 4:
+                g_ui["lbl_status"].Caption = "Props Sending to {} (Multiple Ports)".format(state.target_ip)
+            else:
+                g_ui["lbl_status"].Caption = "Actor {} Sending to {}:{} ({} bones)".format(
+                    act_id, state.target_ip, state.target_port, len(state.bone_cache))
 
             fb_sys = FBSystem()
             fb_sys.OnUIIdle.Remove(OnSendUIIdle)
@@ -900,25 +1001,33 @@ def PopulateTool(tool):
     g_ui["list_actor"].Items.append("VMC1 (Actor 1)")
     g_ui["list_actor"].Items.append("VMC2 (Actor 2)")
     g_ui["list_actor"].Items.append("VMC3 (Actor 3)")
+    g_ui["list_actor"].Items.append("Props / Trackers")
     g_ui["list_actor"].ItemIndex = 0
     g_ui["list_actor"].OnChange.Add(OnActorChange)
     g_ui["lyt_actor"].Add(g_ui["lbl_actor"], 75)
     g_ui["lyt_actor"].Add(g_ui["list_actor"], 140)
 
-    def hdr(text):
+    def hdr(text, key=None):
         lbl = FBLabel()
         lbl.Caption = "--- " + text + " ---"
         lbl.Justify = FBTextJustify.kFBTextJustifyCenter
+        if key: g_ui[key] = lbl
         return lbl
 
     def btn(caption, cb):
         b = FBButton(); b.Caption = caption; b.OnClick.Add(cb); return b
 
-    # ── SKELETON buttons
+    g_ui["hdr_skel"] = hdr("SKELETON")
     g_ui["btn_scan"]  = btn("Scan VMC Bones",           OnScanClick)
     g_ui["btn_gen"]   = btn("Generate Skeleton",        OnGenerateSkeletonClick)
+    
+    g_ui["hdr_char"] = hdr("CHARACTERIZE")
     g_ui["btn_char"]  = btn("Characterize HIK",         OnCharacterizeClick)
+    
+    g_ui["hdr_del"] = hdr("CLEAN SKELETON")
     g_ui["btn_del"]   = btn("Delete Skeleton",          OnDeleteSkeletonClick)
+    
+    g_ui["hdr_match"] = hdr("MATCH PROPORTIONS")
     g_ui["btn_match"] = btn("Match Proportions",        OnMatchProportionsClick)
     
     # HIK Character source list
@@ -928,6 +1037,7 @@ def PopulateTool(tool):
     g_ui["lyt_char_src"].Add(g_ui["list_char_source"], 150)
     g_ui["lyt_char_src"].Add(g_ui["btn_refresh_chars"], 65)
 
+    g_ui["hdr_vrm"] = hdr("MATCH FROM VRM FILE")
     # VRM File browse
     g_ui["lyt_vrm_path"] = FBHBoxLayout()
     g_ui["edit_vrm_path"] = FBEdit(); g_ui["edit_vrm_path"].Text = ""
@@ -935,6 +1045,21 @@ def PopulateTool(tool):
     g_ui["lyt_vrm_path"].Add(g_ui["edit_vrm_path"],   145)
     g_ui["lyt_vrm_path"].Add(g_ui["btn_browse_vrm"],   70)
     g_ui["btn_match_vrm"] = btn("Match from VRM File", OnMatchFromVRMClick)
+
+    g_ui["hdr_props"] = hdr("TRACKERS / PROPS")
+    # ── PROPS Manager UI
+    g_ui["lyt_props_port"] = FBHBoxLayout()
+    g_ui["lbl_prop_port"] = FBLabel(); g_ui["lbl_prop_port"].Caption = "Initial Port:"
+    g_ui["edit_prop_port"] = FBEdit(); g_ui["edit_prop_port"].Text = "39542"
+    g_ui["lyt_props_port"].Add(g_ui["lbl_prop_port"], 75)
+    g_ui["lyt_props_port"].Add(g_ui["edit_prop_port"], 140)
+
+    g_ui["lyt_props_btns"] = FBHBoxLayout()
+    g_ui["btn_add_props"] = btn("Add / Update Selected", OnAddPropsClick)
+    g_ui["btn_clear_props"] = btn("Clear Props", OnClearPropsClick)
+    g_ui["lyt_props_btns"].Add(g_ui["btn_add_props"], 130)
+    g_ui["lyt_props_btns"].Add(g_ui["btn_clear_props"], 90)
+    g_ui["list_props"] = FBList()
 
     # ── Send Target
     g_ui["lyt_ip"]   = FBHBoxLayout()
@@ -987,32 +1112,61 @@ def PopulateTool(tool):
 
     g_ui["lbl_status"] = FBLabel(); g_ui["lbl_status"].Caption = "Status: Stopped"
 
-    lay = g_ui["main_layout"]
-    lay.Add(g_ui["lyt_actor"],            30)
-    lay.Add(hdr("SKELETON"),              25)
-    lay.Add(g_ui["btn_scan"],             35)
-    lay.Add(g_ui["btn_gen"],              35)
-    lay.Add(hdr("MATCH PROPORTIONS"),     25)
-    lay.Add(g_ui["lyt_char_src"],         30)
-    lay.Add(g_ui["btn_match"],            35)
-    lay.Add(hdr("MATCH FROM VRM FILE"),   25)
-    lay.Add(g_ui["lyt_vrm_path"],         30)
-    lay.Add(g_ui["btn_match_vrm"],        35)
-    lay.Add(hdr("CHARACTERIZE"),          25)
-    lay.Add(g_ui["btn_char"],             35)
-    lay.Add(hdr("CLEAN SKELETON"),       25)
-    lay.Add(g_ui["btn_del"],             35)
-    lay.Add(hdr("SEND & CONTROL"),        25)
-    lay.Add(g_ui["lyt_ip"],              30)
-    lay.Add(g_ui["lyt_port"],            30)
-    lay.Add(g_ui["lyt_fps"],             30)
-    lay.Add(g_ui["lyt_hip_x"],           30)
-    lay.Add(g_ui["lyt_hip_z"],           30)
-    lay.Add(g_ui["btn_stream"],          35)
-    lay.Add(g_ui["lbl_status"],          30)
+    g_ui["hdr_send"] = hdr("SEND & CONTROL")
+    
+    # Store tool reference for dynamic rebuilds
+    g_ui["tool"] = tool
     
     # Auto-populate character list on open
     OnRefreshCharListClick(None, None)
+    
+    # Initial layout build
+    _rebuild_layout()
+
+def _rebuild_layout():
+    act_id = current_actor()
+    is_props = (act_id == 4)
+    
+    lay = FBVBoxLayout()
+    g_ui["main_layout"] = lay
+    g_ui["tool"].SetControl("main", lay)
+    
+    lay.Add(g_ui["lyt_actor"], 30)
+    
+    if is_props:
+        lay.Add(g_ui["hdr_props"], 25)
+        lay.Add(g_ui["lyt_props_port"], 30)
+        lay.Add(g_ui["lyt_props_btns"], 30)
+        lay.Add(g_ui["list_props"], 60) # Reduced height
+    else:
+        lay.Add(g_ui["hdr_skel"], 25)
+        lay.Add(g_ui["btn_scan"], 35)
+        lay.Add(g_ui["btn_gen"], 35)
+        lay.Add(g_ui["hdr_match"], 25)
+        lay.Add(g_ui["lyt_char_src"], 30)
+        lay.Add(g_ui["btn_match"], 35)
+        lay.Add(g_ui["hdr_vrm"], 25)
+        lay.Add(g_ui["lyt_vrm_path"], 30)
+        lay.Add(g_ui["btn_match_vrm"], 35)
+        lay.Add(g_ui["hdr_char"], 25)
+        lay.Add(g_ui["btn_char"], 35)
+        lay.Add(g_ui["hdr_del"], 25)
+        lay.Add(g_ui["btn_del"], 35)
+        
+    lay.Add(g_ui["hdr_send"], 25)
+    lay.Add(g_ui["lyt_ip"], 30)
+    
+    if not is_props:
+        lay.Add(g_ui["lyt_port"], 30) # Hide global UDP port in props mode
+        
+    lay.Add(g_ui["lyt_fps"], 30)
+    
+    if not is_props:
+        lay.Add(g_ui["lyt_hip_x"], 30)
+        lay.Add(g_ui["lyt_hip_z"], 30)
+        
+    lay.Add(g_ui["btn_stream"], 35)
+    lay.Add(g_ui["lbl_status"], 30)
 
 def CreateTool():
     tool_name = "Saint's Mobu2VMC Sender"
