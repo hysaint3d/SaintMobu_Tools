@@ -1,5 +1,5 @@
 {
-  "TemplateName": "Core 50",
+  "TemplateName": "Motive Core 50",
   "ExpectedMarkers": [
     "HeadFront", "HeadRight", "HeadLeft", "HeadTop",
     "ChestTop", "ChestLow",
@@ -32,23 +32,25 @@
     "RightLeg": ["RShin", "RAnkleOut", "RHeel", "RToeOut", "RToeIn", "RToeTip"]
   },
   "ActorMapping": {
+    "Reference": ["optical"],
     "Head": ["HeadTop", "HeadFront", "HeadRight", "HeadLeft"],
-    "Chest": ["ChestTop", "ChestLow"],
-    "Spine": ["BackTop", "BackLeft", "BackRight", "WaistCBack"],
-    "Hips": ["WaistLFront", "WaistRFront", "WaistLBack", "WaistRBack"],
+    "Chest": ["ChestTop", "ChestLow", "BackTop", "BackLeft", "BackRight"],
+    "Hips": ["WaistLFront", "WaistRFront", "WaistLBack", "WaistRBack", "WaistCBack"],
     "LeftShoulder": ["LShoulderTop", "LShoulderBack"],
     "RightShoulder": ["RShoulderTop", "RShoulderBack"],
-    "LeftArm": ["LUArmHigh"],
-    "RightArm": ["RUArmHigh"],
-    "LeftForeArm": ["LElbowOut", "LFArm"],
-    "RightForeArm": ["RElbowOut", "RFArm"],
-    "LeftHand": ["LWristIn", "LWristOut", "LHandIn", "LHandOut"],
-    "RightHand": ["RWristIn", "RWristOut", "RHandIn", "RHandOut"],
-    "LeftUpLeg": ["LThighFront", "LThighSide"],
-    "RightUpLeg": ["RThighFront", "RThighSide"],
-    "LeftLeg": ["LKneeOut", "LShin"],
-    "RightLeg": ["RKneeOut", "RShin"],
-    "LeftFoot": ["LAnkleOut", "LHeel", "LToeOut", "LToeIn", "LToeTip"],
-    "RightFoot": ["RAnkleOut", "RHeel", "RToeOut", "RToeIn", "RToeTip"]
+    "LeftArm": ["LUArmHigh", "LElbowOut"],
+    "RightArm": ["RUArmHigh", "RElbowOut"],
+    "LeftForeArm": ["LFArm", "LWristIn", "LWristOut"],
+    "RightForeArm": ["RFArm", "RWristIn", "RWristOut"],
+    "LeftHand": ["LHandIn", "LHandOut"],
+    "RightHand": ["RHandIn", "RHandOut"],
+    "LeftUpLeg": ["LKneeOut", "LThighFront", "LThighSide"],
+    "RightUpLeg": ["RKneeOut", "RThighFront", "RThighSide"],
+    "LeftLeg": ["LShin", "LAnkleOut"],
+    "RightLeg": ["RShin", "RAnkleOut"],
+    "LeftFoot": ["LHeel", "LToeOut", "LToeIn", "LToeTip"],
+    "RightFoot": ["RHeel", "RToeOut", "RToeIn", "RToeTip"],
+    "LeftToe": ["LToeTip"],
+    "RightToe": ["RToeTip"]
   }
 }

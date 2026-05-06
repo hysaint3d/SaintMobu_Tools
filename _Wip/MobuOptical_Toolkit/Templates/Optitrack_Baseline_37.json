@@ -1,0 +1,45 @@
+{
+  "TemplateName": "Motive Baseline 37",
+  "ExpectedMarkers": [
+    "HeadFront", "HeadTop", "HeadSide",
+    "Chest", "BackTop", "BackLeft", "BackRight",
+    "WaistLFront", "WaistRFront", "WaistLBack", "WaistRBack",
+    "LShoulderTop", "LShoulderBack", "RShoulderTop", "RShoulderBack",
+    "LUArmHigh", "RUArmHigh",
+    "LElbowOut", "RElbowOut",
+    "LWristIn", "LWristOut", "RWristIn", "RWristOut",
+    "LHandOut", "RHandOut",
+    "LThigh", "RThigh",
+    "LKneeOut", "RKneeOut",
+    "LShin", "RShin",
+    "LAnkleOut", "RAnkleOut",
+    "LToeOut", "RToeOut", "LToeIn", "RToeIn"
+  ],
+  "RigidBodies": {
+    "Body": ["HeadTop", "HeadFront", "HeadSide", "Chest", "BackTop", "BackLeft", "BackRight", "WaistLFront", "WaistRFront", "WaistLBack", "WaistRBack"],
+    "LeftArm": ["LShoulderTop", "LShoulderBack", "LUArmHigh", "LElbowOut", "LWristIn", "LWristOut", "LHandOut"],
+    "RightArm": ["RShoulderTop", "RShoulderBack", "RUArmHigh", "RElbowOut", "RWristIn", "RWristOut", "RHandOut"],
+    "LeftLeg": ["LThigh", "LKneeOut", "LShin", "LAnkleOut", "LToeOut", "LToeIn"],
+    "RightLeg": ["RThigh", "RKneeOut", "RShin", "RAnkleOut", "RToeOut", "RToeIn"]
+  },
+  "ActorMapping": {
+    "Reference": ["optical"],
+    "Head": ["HeadTop", "HeadFront", "HeadSide"],
+    "Chest": ["Chest", "BackTop", "BackLeft", "BackRight"],
+    "Hips": ["WaistLFront", "WaistRFront", "WaistLBack", "WaistRBack"],
+    "LeftShoulder": ["LShoulderTop", "LShoulderBack"],
+    "RightShoulder": ["RShoulderTop", "RShoulderBack"],
+    "LeftArm": ["LUArmHigh", "LElbowOut"],
+    "RightArm": ["RUArmHigh", "RElbowOut"],
+    "LeftForeArm": ["LWristIn", "LWristOut", "LElbowOut"],
+    "RightForeArm": ["RWristIn", "RWristOut", "RElbowOut"],
+    "LeftHand": ["LHandOut", "LWristIn", "LWristOut"],
+    "RightHand": ["RHandOut", "RWristIn", "RWristOut"],
+    "LeftUpLeg": ["LKneeOut", "LThigh"],
+    "RightUpLeg": ["RKneeOut", "RThigh"],
+    "LeftLeg": ["LShin", "LAnkleOut", "LKneeOut"],
+    "RightLeg": ["RShin", "RAnkleOut", "RKneeOut"],
+    "LeftFoot": ["LToeOut", "LToeIn", "LAnkleOut"],
+    "RightFoot": ["RToeOut", "RToeIn", "RAnkleOut"]
+  }
+}

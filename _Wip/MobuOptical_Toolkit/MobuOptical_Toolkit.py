@@ -24,6 +24,7 @@ g_ui = {}
 g_templates = []
 
 ID_MAP = {
+    "Reference": FBSkeletonNodeId.kFBSkeletonReferenceIndex,
     "Head": FBSkeletonNodeId.kFBSkeletonHeadIndex, "Chest": FBSkeletonNodeId.kFBSkeletonChestIndex,
     "Spine": FBSkeletonNodeId.kFBSkeletonWaistIndex, "Hips": FBSkeletonNodeId.kFBSkeletonHipsIndex,
     "LeftShoulder": FBSkeletonNodeId.kFBSkeletonLeftCollarIndex, "RightShoulder": FBSkeletonNodeId.kFBSkeletonRightCollarIndex,
@@ -33,6 +34,7 @@ ID_MAP = {
     "LeftUpLeg": FBSkeletonNodeId.kFBSkeletonLeftHipIndex, "RightUpLeg": FBSkeletonNodeId.kFBSkeletonRightHipIndex,
     "LeftLeg": FBSkeletonNodeId.kFBSkeletonLeftKneeIndex, "RightLeg": FBSkeletonNodeId.kFBSkeletonRightKneeIndex,
     "LeftFoot": FBSkeletonNodeId.kFBSkeletonLeftAnkleIndex, "RightFoot": FBSkeletonNodeId.kFBSkeletonRightAnkleIndex,
+    "LeftToe": FBSkeletonNodeId.kFBSkeletonLeftFootIndex, "RightToe": FBSkeletonNodeId.kFBSkeletonRightFootIndex,
 }
 
 # Dynamically add finger indices to ID_MAP
@@ -224,6 +226,23 @@ def OnAutoMapClick(control, event):
     match_count = 0
     
     for slot_name, potential_names in mapping.items():
+        if slot_name == "Reference":
+            try:
+                markerset.AddMarker(FBSkeletonNodeId.kFBSkeletonReferenceIndex, optical)
+                print(">>> Assigned Reference via AddMarker")
+            except Exception as e:
+                print(">>> AddMarker Ref error:", e)
+                
+            for p in actor.PropertyList:
+                if "reference" in p.Name.lower() or "ref" in p.Name.lower():
+                    try: p.removeAll(); p.append(optical); print(">>> Mapped Actor prop:", p.Name)
+                    except: pass
+            for p in markerset.PropertyList:
+                if "reference" in p.Name.lower() or "ref" in p.Name.lower():
+                    try: p.removeAll(); p.append(optical); print(">>> Mapped MarkerSet prop:", p.Name)
+                    except: pass
+            continue
+            
         node_id = ID_MAP.get(slot_name)
         if node_id is not None:
             for marker in optical.Children:
@@ -255,14 +274,7 @@ def PopulateTool(tool):
     def btn(txt, fn): b = FBButton(); b.Caption = txt; b.OnClick.Add(fn); return b
     def lbl(txt): l = FBLabel(); l.Caption = txt; return l
 
-    lyt.Add(lbl("1. Data Management"), 20)
-    lyt.Add(btn("Import Optical Data", OnImportClick), 35)
-    lyt.Add(btn("Create Rigid Bodies", OnCreateRigidClick), 35)
-    
-    lyt.Add(lbl("2. Actor Setup"), 20)
-    lyt.Add(btn("Create & Fit Actor", OnCreateAndFitClick), 45)
-    
-    lyt.Add(lbl("3. Mapping & Solving"), 20)
+    lyt.Add(lbl("1. Data & Template Selection"), 20)
     lyt_temp = FBHBoxLayout(); lyt_temp.Add(lbl("Template:"), 60)
     g_ui["list_template"] = FBList()
     
@@ -276,6 +288,13 @@ def PopulateTool(tool):
         
     lyt_temp.Add(g_ui["list_template"], 140); lyt.Add(lyt_temp, 25)
     
+    lyt.Add(btn("Import Optical Data", OnImportClick), 35)
+    
+    lyt.Add(lbl("2. Rigid Bodies & Actor"), 20)
+    lyt.Add(btn("Create Rigid Bodies", OnCreateRigidClick), 35)
+    lyt.Add(btn("Create & Fit Actor", OnCreateAndFitClick), 45)
+    
+    lyt.Add(lbl("3. Auto-Mapping"), 20)
     lyt.Add(btn("Auto-Map MarkerSet", OnAutoMapClick), 40)
     lyt.Add(btn("Activate Mapping", OnActivateClick), 40)
     
