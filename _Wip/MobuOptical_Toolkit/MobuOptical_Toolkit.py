@@ -115,7 +115,7 @@ def OnCreateRigidClick(control, event):
     rigid_groups = template.get("RigidBodies", {})
     
     for g_name, m_names in rigid_groups.items():
-        mlist = [m for m in optical.Children if m.Name.split(":")[-1] in m_names]
+        mlist = [m for m in optical.Children if m.Name.split(":")[-1].replace("_", " ").split()[-1] in m_names]
         if len(mlist) >= 3:
             if optical.CreateRigidBody(g_name, mlist): created += 1
     status("Created {} Rigid Bodies.".format(created))
@@ -147,7 +147,7 @@ def OnCreateAndFitClick(control, event):
         p = FBVector3d(); marker.GetVector(p)
         if p[1] > max_y: max_y = p[1]
         if p[1] < min_y: min_y = p[1]
-        name = marker.Name.split(":")[-1]; pts[name] = p
+        name = marker.Name.split(":")[-1].replace("_", " ").split()[-1]; pts[name] = p
         
         if name in hip_names or "Waist" in name or "ASI" in name or "PSI" in name:
             waist_markers.append(p)
@@ -246,7 +246,7 @@ def OnAutoMapClick(control, event):
         node_id = ID_MAP.get(slot_name)
         if node_id is not None:
             for marker in optical.Children:
-                if marker.Name.split(":")[-1] in potential_names:
+                if marker.Name.split(":")[-1].replace("_", " ").split()[-1] in potential_names:
                     try: markerset.AddMarker(node_id, marker); match_count += 1
                     except: pass
     FBSystem().Scene.Evaluate(); status("Mapped {} markers.".format(match_count))
