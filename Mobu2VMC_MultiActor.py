@@ -1,14 +1,16 @@
 """
 Mobu2VMC_MultiActor.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Stream bone rotations and root position from MotionBuilder to VMC-compatible
-receivers (e.g. Warudo) via OSC/UDP. Supports up to 3 simultaneous actors,
-each with an independent namespace (VMC1/VMC2/VMC3) and target port.
+Stream character bones and rigid body trackers from MotionBuilder to VMC
+receivers (e.g. Warudo). Supports 3 simultaneous actors + Props mode.
 
-Workflow:
-  1. Select Actor → Generate Standard Skeleton (or load existing VMC_ bones)
-  2. (Optional) Match Proportions to a source HIK character → Characterize HIK
-  3. Set Target IP & Port → Start Sending
+Workflow (Character):
+  1. Select Actor -> Generate Skeleton -> Match Proportions -> Characterize
+  2. Set Target IP & Port -> Start Sending
+
+Workflow (Props / Trackers):
+  1. Select Props/Trackers -> Input Port -> Select Model(s) -> Add/Update
+  2. Start Sending (Auto-mapped as Root for easy Warudo Blueprint setup)
 
 由小聖腦絲與 Antigravity 協作完成
 https://www.facebook.com/hysaint3d.mocap
