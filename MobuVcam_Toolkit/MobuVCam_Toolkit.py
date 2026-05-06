@@ -8,12 +8,14 @@ Workflow:
   1. Select a scene model → Create & Attach Camera
   2. Set as Active Camera to view through it
   3. Adjust Mounting Offset if lens direction needs correction
-  4. Use FOV slider or Xbox gamepad (LT/RT) to zoom
+  4. Use FOV slider or Xbox gamepad to zoom/pan
   5. Record (FOV keyframed) / Snapshot (viewport → PNG)
 
 Gamepad: Xbox-compatible BT controller via XInput (ctypes, no third-party libs)
-  LT = Zoom Out (FOV↑)   RT = Zoom In (FOV↓)
-  RB = Snapshot           Start = Record toggle
+  [Camera] LT/RT/LS-Y = Zoom   RS = Pan/Tilt   Start = Reset FOV/Offset
+  [Capture] A = Record Toggle   B = Snapshot
+  [Takes] X/Y = Prev/Next Take   LB/RB = Goto Start/End
+  [Timeline] D-Pad UP/DOWN = Play Fwd/Bwd   D-Pad L/R = Step Bwd/Fwd
 
 由小聖腦絲與 Antigravity 協作完成
 https://www.facebook.com/hysaint3d.mocap
@@ -113,9 +115,12 @@ except Exception:
     pass
 
 XBTN_START = 0x0010
+XBTN_LB    = 0x0100
 XBTN_RB    = 0x0200
-XBTN_A     = 0x4000
-XBTN_X     = 0x1000
+XBTN_A     = 0x1000
+XBTN_B     = 0x2000
+XBTN_X     = 0x4000
+XBTN_Y     = 0x8000
 XBTN_UP    = 0x0001
 XBTN_DOWN  = 0x0002
 XBTN_LEFT  = 0x0004
@@ -1222,8 +1227,8 @@ def OnUIIdle(c, e):
             g_state['last_record_time'] = now
             if 'btn_record' in g_ui: OnRecordClick(g_ui['btn_record'], None)
             
-    # X Button -> Snapshot
-    if pressed & XBTN_X:
+    # B Button -> Snapshot
+    if pressed & XBTN_B:
         if now - g_state.get('last_snap_time', 0) > 0.5:
             g_state['last_snap_time'] = now
             OnSnapshotClick(None, None)
@@ -1244,23 +1249,67 @@ def OnUIIdle(c, e):
     
     if pressed & XBTN_UP:
         # Toggle Forward
-        is_rev = bool(p_rev.Data) if p_rev else False
-        if player.IsPlaying and not is_rev:
+        if player.IsPlaying and g_state.get('playback_dir') == 'fwd':
             player.Stop()
+            g_state['playback_dir'] = None
         else:
             player.Stop()
             if p_spd: p_spd.Data = 1.0
             if p_rev: p_rev.Data = False
+            g_state['playback_dir'] = 'fwd'
             player.Play(False)
             
     if pressed & XBTN_DOWN:
-        # Set to Stop as backward playback is unavailable
-        player.Stop()
+        # Toggle Backward
+        if player.IsPlaying and g_state.get('playback_dir') == 'bwd':
+            player.Stop()
+            g_state['playback_dir'] = None
+        else:
+            player.Stop()
+            if p_spd: p_spd.Data = 1.0
+            if p_rev: p_rev.Data = True
+            g_state['playback_dir'] = 'bwd'
+            try:
+                player.PlayReverse()
+            except AttributeError:
+                try:
+                    player.Play(True)
+                except:
+                    pass
+            except:
+                pass
             
     if pressed & XBTN_LEFT:
         player.StepBackward()
     if pressed & XBTN_RIGHT:
         player.StepForward()
+
+    # LB/RB -> Jump to Start/End
+    if pressed & XBTN_LB:
+        player.GotoStart()
+        _update_status('Jumped to Start.')
+    if pressed & XBTN_RB:
+        try:
+            player.GotoEnd()
+            _update_status('Jumped to End.')
+        except:
+            pass
+
+    # X/Y -> Previous/Next Take
+    if pressed & (XBTN_X | XBTN_Y):
+        takes = FBSystem().Scene.Takes
+        cur_take = FBSystem().CurrentTake
+        idx = -1
+        for i, t in enumerate(takes):
+            if t == cur_take:
+                idx = i
+                break
+        if pressed & XBTN_X and idx > 0:
+            FBSystem().CurrentTake = takes[idx - 1]
+            _update_status('Take: ' + takes[idx - 1].Name)
+        elif pressed & XBTN_Y and idx >= 0 and idx < len(takes) - 1:
+            FBSystem().CurrentTake = takes[idx + 1]
+            _update_status('Take: ' + takes[idx + 1].Name)
 
 # ── UI ─────────────────────────────────────────────────────────────────────────
 def PopulateTool(tool):
