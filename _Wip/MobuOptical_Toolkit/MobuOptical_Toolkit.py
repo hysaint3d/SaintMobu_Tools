@@ -1,16 +1,16 @@
 """
 MobuOptical_Toolkit.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Automate Optical Mocap setup for OptiTrack Baseline 37 & Core 50.
+Automate Optical Mocap setup for OptiTrack, Vicon, and custom systems via JSON.
 Workflow:
-  Import -> RigidBody -> Create & Fit -> AutoMap -> Active
+  Select Template -> Import Data -> Create RigidBodies -> Create & Fit Actor -> AutoMap
 
-Version: 1.24 (Clean Workflow)
+Version: 2.0 (Template-Driven Architecture)
 由小聖腦絲與 Antigravity 協作完成
 https://www.facebook.com/hysaint3d.mocap
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
-print(">>> MobuOptical_Toolkit v1.24 Loading...")
+print(">>> MobuOptical_Toolkit v2.0 Loading...")
 from pyfbsdk import *
 from pyfbsdk_additions import *
 import sys
