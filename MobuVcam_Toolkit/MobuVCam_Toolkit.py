@@ -51,6 +51,14 @@ if hasattr(sys, 'mobu_vcam_toolkit_state') and sys.mobu_vcam_toolkit_state:
     if _s:
         try: _s.close()
         except: pass
+    # Force remove ANY potential old idle function
+    try: FBSystem().OnUIIdle.Remove(sys.mobu_vcam_toolkit_idle_func)
+    except: pass
+
+# ── Versioning to kill old persistent idle loops ──
+if not hasattr(sys, 'mobu_vcam_ver'): sys.mobu_vcam_ver = 0
+sys.mobu_vcam_ver += 1
+g_current_ver = sys.mobu_vcam_ver
 
 sys.mobu_vcam_toolkit_state = {
     'camera':          None,
@@ -81,6 +89,7 @@ sys.mobu_vcam_toolkit_state = {
     'ovr_con_ok':      False,
     'ovr_ctrl_device': 1,
     'ovr_prev_btns':   0,
+    'base_rot':        [0.0, -90.0, 0.0],
 }
 g_state = sys.mobu_vcam_toolkit_state
 g_ui    = {}
@@ -105,8 +114,16 @@ except Exception:
 
 XBTN_START = 0x0010
 XBTN_RB    = 0x0200
+XBTN_A     = 0x4000
+XBTN_X     = 0x1000
+XBTN_UP    = 0x0001
+XBTN_DOWN  = 0x0002
+XBTN_LEFT  = 0x0004
+XBTN_RIGHT = 0x0008
 GP_DEAD    = 30      # trigger dead-zone (0-255)
-GP_SPEED   = 0.06   # FOV degrees per trigger unit per idle frame
+GP_STICK_DEAD = 8000 # thumbstick dead-zone
+GP_SPEED   = 0.02    # FOV change factor (increased for response)
+GP_ROT_MAX = 45.0    # max degrees offset for right stick
 _prev_btn  = 0
 
 def _read_gamepad():
@@ -710,6 +727,7 @@ def _apply_rot(axis, deg):
     elif axis == 'Y': rot[1] += deg
     else: rot[2] += deg
     null.SetVector(rot, FBModelTransformationType.kModelRotation, False)
+    g_state['base_rot'] = [rot[0], rot[1], rot[2]]
     FBSystem().Scene.Evaluate()
 
 def _make_rot_cb(axis, deg):
@@ -745,6 +763,7 @@ def OnCreateCameraClick(c, e):
     # Y=-90 rotates the camera's natural +X facing to world +Z
     offset.SetVector(FBVector3d(0, 0, 0),  FBModelTransformationType.kModelTranslation, False)
     offset.SetVector(FBVector3d(0, -90, 0), FBModelTransformationType.kModelRotation,    False)
+    g_state['base_rot'] = [0.0, -90.0, 0.0]
     FBSystem().Scene.Evaluate()
 
     # FBCamera → child of offset, also zeroed locally
@@ -826,6 +845,7 @@ def OnResetOffsetClick(c, e):
     if null:
         # Y=-90 → camera faces world +Z (FBCamera natural look = +X, so -90° → +Z)
         null.SetVector(FBVector3d(0, -90, 0), FBModelTransformationType.kModelRotation, False)
+        g_state['base_rot'] = [0.0, -90.0, 0.0]
         FBSystem().Scene.Evaluate()
         _update_status('Mounting offset reset to face +Z.')
     else:
@@ -882,6 +902,7 @@ def OnRecordClick(c, e):
             g_ui['btn_record'].Caption = '🔴 Record'
         try:
             FBPlayerControl().Stop()
+            FBSystem().Scene.Evaluate() # Force refresh
             stop_t = FBSystem().LocalTime
             take   = FBSystem().CurrentTake
             if take:
@@ -987,6 +1008,12 @@ def OnSnapshotClick(c, e):
 
 # ── UIIdle (OSC polling + Gamepad + Keyframing during Record) ──────────────────
 def OnUIIdle(c, e):
+    # Kill self if a newer version of the script is running
+    if sys.mobu_vcam_ver != g_current_ver:
+        try: FBSystem().OnUIIdle.Remove(OnUIIdle)
+        except: pass
+        return
+
     global _prev_btn
 
     # ── OSC polling ────────────────────────────────────────────────────────────
@@ -1140,32 +1167,100 @@ def OnUIIdle(c, e):
     if g_state.get('is_recording'):
         cam = g_state.get('camera')
         if cam:
-            try: _key_float(cam.FieldOfView, g_state['fov'])
-            except: pass
+            try:
+                _ = cam.Name # Check if destroyed
+                _key_float(cam.FieldOfView, g_state['fov'])
+            except:
+                g_state['camera'] = None
 
     # ── Gamepad polling ────────────────────────────────────────────────────
     if not g_state['gamepad_enabled']: return
     gp = _read_gamepad()
     if not gp: return
 
+    # 1. Smooth Zoom (LT/RT + Left Stick Y)
     lt = max(0, gp.bLeftTrigger  - GP_DEAD)
     rt = max(0, gp.bRightTrigger - GP_DEAD)
-    if lt > 0 or rt > 0:
-        _set_fov(g_state['fov'] + (lt - rt) * GP_SPEED)
+    lsy = 0
+    if abs(gp.sThumbLY) > GP_STICK_DEAD:
+        lsy = gp.sThumbLY / 128.0  # Scale stick to match trigger range roughly
+    
+    zoom_delta = (lt - rt) + lsy
+    if zoom_delta != 0:
+        _set_fov(g_state['fov'] + zoom_delta * GP_SPEED)
 
+    # 2. Right Stick Rotation (Auto-centering ON CAMERA BODY)
+    cam = g_state.get('camera')
+    if cam:
+        try:
+            _ = cam.Name # Check if destroyed
+            rsx = gp.sThumbRX if abs(gp.sThumbRX) > GP_STICK_DEAD else 0
+            rsy = gp.sThumbRY if abs(gp.sThumbRY) > GP_STICK_DEAD else 0
+            
+            if rsx != 0 or rsy != 0:
+                pan  = -(rsx / 32767.0) * GP_ROT_MAX
+                tilt = (rsy / 32767.0) * GP_ROT_MAX
+                # For Camera body: Y is Yaw, X is Roll, so Z must be Tilt
+                cam.SetVector(FBVector3d(0, pan, tilt), 
+                              FBModelTransformationType.kModelRotation, False)
+            else:
+                # Snap back to zero rotation locally
+                cam.SetVector(FBVector3d(0, 0, 0), 
+                              FBModelTransformationType.kModelRotation, False)
+        except:
+            g_state['camera'] = None
+
+    # 3. Buttons
     btn     = gp.wButtons
     pressed = btn & ~_prev_btn
     _prev_btn = btn
-
     now = time.time()
-    if pressed & XBTN_RB:
-        if now - g_state.get('last_snap_time', 0) > 0.5:
-            g_state['last_snap_time'] = now
-            OnSnapshotClick(None, None)
-    if pressed & XBTN_START:
+    
+    # A Button -> Record Toggle
+    if pressed & XBTN_A:
         if now - g_state.get('last_record_time', 0) > 1.0:
             g_state['last_record_time'] = now
             if 'btn_record' in g_ui: OnRecordClick(g_ui['btn_record'], None)
+            
+    # X Button -> Snapshot
+    if pressed & XBTN_X:
+        if now - g_state.get('last_snap_time', 0) > 0.5:
+            g_state['last_snap_time'] = now
+            OnSnapshotClick(None, None)
+            
+    # Start Button -> Reset FOV & Offset
+    if pressed & XBTN_START:
+        _set_fov(60.0)
+        OnResetOffsetClick(None, None)
+        _update_status('Reset FOV & Camera Offset.')
+
+    # 4. D-Pad -> Timeline control
+    player = FBPlayerControl()
+    p_rev  = player.PropertyList.Find('Reverse')
+    if not p_rev: p_rev = player.PropertyList.Find('PlaybackReverse')
+    
+    p_spd  = player.PropertyList.Find('PlaybackSpeed')
+    if not p_spd: p_spd = player.PropertyList.Find('TransportSpeed')
+    
+    if pressed & XBTN_UP:
+        # Toggle Forward
+        is_rev = bool(p_rev.Data) if p_rev else False
+        if player.IsPlaying and not is_rev:
+            player.Stop()
+        else:
+            player.Stop()
+            if p_spd: p_spd.Data = 1.0
+            if p_rev: p_rev.Data = False
+            player.Play(False)
+            
+    if pressed & XBTN_DOWN:
+        # Set to Stop as backward playback is unavailable
+        player.Stop()
+            
+    if pressed & XBTN_LEFT:
+        player.StepBackward()
+    if pressed & XBTN_RIGHT:
+        player.StepForward()
 
 # ── UI ─────────────────────────────────────────────────────────────────────────
 def PopulateTool(tool):
@@ -1181,9 +1276,9 @@ def PopulateTool(tool):
     tool.AddRegion('tab', 'tab', x, y, w, y_tab)
     
     tab_panel = FBTabPanel()
+    tab_panel.Items.append('VCam')
     tab_panel.Items.append('OSC Source')
     tab_panel.Items.append('OpenVR Source')
-    tab_panel.Items.append('VCam')
     tool.SetControl('tab', tab_panel)
     
     y_status_h = FBAddRegionParam(30, FBAttachType.kFBAttachNone, '')
@@ -1197,12 +1292,12 @@ def PopulateTool(tool):
     view_osc = FBVBoxLayout()
     view_ovr = FBVBoxLayout()
     view_vcam = FBVBoxLayout()
-    tool.SetControl('content', view_osc)
+    tool.SetControl('content', view_vcam)
     
     def OnTabChange(c, e):
-        if c.ItemIndex == 0: tool.SetControl('content', view_osc)
-        elif c.ItemIndex == 1: tool.SetControl('content', view_ovr)
-        else: tool.SetControl('content', view_vcam)
+        if c.ItemIndex == 0: tool.SetControl('content', view_vcam)
+        elif c.ItemIndex == 1: tool.SetControl('content', view_osc)
+        else: tool.SetControl('content', view_ovr)
         
     tab_panel.OnChange.Add(OnTabChange)
 
@@ -1280,7 +1375,7 @@ def PopulateTool(tool):
     g_ui['edit_ovr_ctrl'].Precision = 0
     def OnOVRCtrlChange(c, e): g_state['ovr_ctrl_device'] = int(c.Value)
     g_ui['edit_ovr_ctrl'].OnChange.Add(OnOVRCtrlChange)
-    lyt_ovr_ctrl.Add(lbl_ovr_ctrl, 80)
+    lyt_ovr_ctrl.Add(lbl_ovr_ctrl, 85)
     lyt_ovr_ctrl.Add(g_ui['edit_ovr_ctrl'], 45)
 
     g_ui['btn_create_ovr_rb'] = btn('Create OpenVR Source & RigidBody', OnCreateOVRRigidBodyClick)
@@ -1341,16 +1436,10 @@ def PopulateTool(tool):
     lyt_gp = FBHBoxLayout()
     g_ui['chk_gamepad'] = FBButton()
     g_ui['chk_gamepad'].Style   = FBButtonStyle.kFBCheckbox
-    g_ui['chk_gamepad'].Caption = 'Gamepad Zoom (LT/RT)'
-    g_ui['chk_gamepad'].State   = 1
+    g_ui['chk_gamepad'].Caption = 'Gamepad (Xbox)'
+    g_ui['chk_gamepad'].State   = 1 if g_state['gamepad_enabled'] else 0
     g_ui['chk_gamepad'].OnClick.Add(OnGamepadToggle)
-    lbl_gi = FBLabel(); lbl_gi.Caption = ' Ctrl:'
-    g_ui['edit_gp_idx'] = FBEditNumber()
-    g_ui['edit_gp_idx'].Min = 0; g_ui['edit_gp_idx'].Max = 3
-    g_ui['edit_gp_idx'].Value = 0; g_ui['edit_gp_idx'].Precision = 0
-    g_ui['edit_gp_idx'].OnChange.Add(OnGPIndexChange)
-    lyt_gp.Add(g_ui['chk_gamepad'], 140)
-    lyt_gp.Add(lbl_gi, 40); lyt_gp.Add(g_ui['edit_gp_idx'], 50)
+    lyt_gp.Add(g_ui['chk_gamepad'], 230)
 
     # ── CAPTURE
     lyt_snap_path = FBHBoxLayout()
