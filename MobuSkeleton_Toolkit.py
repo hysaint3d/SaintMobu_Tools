@@ -1,13 +1,13 @@
 """
 MobuSkeleton_Toolkit.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Generate a standard T-Pose skeleton (VMC or HIK naming), match its proportions
-to any HIK characterized character, and characterize as HIK.
+Generate a standard T-Pose skeleton (VMC, HIK, or UE naming) and match 
+its proportions to any HIK character for precise retargeting.
 
 Workflow:
-  1. Set namespace & height → Generate Skeleton
-  2. (Optional) Select source HIK character → Match Proportions
-  3. Characterize HIK
+  1. Set NameSpace, Mode (VMC/HIK/UE) & Height -> Generate Character
+  2. (Optional) Select source HIK character -> Match & Characterize
+  3. Use the generated skeleton for VMC streaming or retargeting
 
 由小聖腦絲與 Antigravity 協作完成
 https://www.facebook.com/hysaint3d.mocap
