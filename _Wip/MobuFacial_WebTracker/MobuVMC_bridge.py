@@ -90,7 +90,7 @@ async def main():
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print(f" [1] Listening for Browser: ws://{LISTEN_IP}:{LISTEN_PORT}")
     print(f" [2] Forwarding to MoBu:    UDP {TARGET_IP}:{TARGET_PORT}")
-    print(" [3] Status:                READY. Please open MobuWebFace.html in Chrome.")
+    print(" [3] Status:                READY. Please open MobuFacial_WebTracker.html in Chrome.")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print(" Press Ctrl+C to stop.\n")
     

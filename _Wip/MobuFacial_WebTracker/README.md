@@ -5,17 +5,17 @@ A zero-install browser-based tracking tool for MotionBuilder.
 ## Setup Instructions
 
 1.  **Start the Bridge**:
-    - Run `start_bridge.bat`.
+    - Run `start_MobuVMC_bridge.bat`.
     - It will automatically install `websockets` if missing.
     - Keep this window open. It will relay data from your browser to MotionBuilder.
 
 2.  **Open the Tracker**:
-    - Open `tracker.html` in **Google Chrome** or **Microsoft Edge**.
+    - Open `MobuFacial_WebTracker.html` in **Google Chrome** or **Microsoft Edge**.
     - Wait for "MediaPipe: Ready" (green status).
     - Click **Start Camera & Tracking**.
 
 3.  **Setup MotionBuilder**:
-    - Run your `VMC2Mobu.py` script.
+    - Run the `VMC2Mobu_MultiActor.py` script.
     - Set the receiver port to `39539` (default VMC).
     - You should see the Blendshapes and Hand data arriving!
 
