@@ -237,15 +237,18 @@ def OnUIIdle(control, event):
                 pass
                 
     # Update UI for current actor
-    act_id = current_actor()
-    act_state = g_vmc_states[act_id]
-    if act_state.is_connected:
-        if len(act_state.bone_data_cache) > 0:
-            g_ui["lbl_status"].Caption = "Actor {} Receiving Data (Bones: {}, Expr: {})".format(act_id, len(act_state.bone_data_cache), len(act_state.blend_data_cache))
+    try:
+        act_id = current_actor()
+        act_state = g_vmc_states[act_id]
+        if act_state.is_connected:
+            if len(act_state.bone_data_cache) > 0:
+                g_ui["lbl_status"].Caption = "Actor {} Receiving Data (Bones: {}, Expr: {})".format(act_id, len(act_state.bone_data_cache), len(act_state.blend_data_cache))
+            else:
+                g_ui["lbl_status"].Caption = "Actor {} Connected (Port: {}), but no bones parsed yet.".format(act_id, act_state.port)
         else:
-            g_ui["lbl_status"].Caption = "Actor {} Connected (Port: {}), but no bones parsed yet.".format(act_id, act_state.port)
-    else:
-        g_ui["lbl_status"].Caption = "Actor {} Disconnected".format(act_id)
+            g_ui["lbl_status"].Caption = "Actor {} Disconnected".format(act_id)
+    except:
+        pass
 
 def OnActorChange(control, event):
     act_id = current_actor()
@@ -568,11 +571,14 @@ def OnDeleteSkeletonClick(control, event):
         except: pass
             
     for m in list(FBSystem().Scene.Components):
-        if hasattr(m, "Name") and m.Name:
-            if m.Name.startswith(prefix) or (hasattr(m, "LongName") and m.LongName and m.LongName.startswith(prefix)):
-                if isinstance(m, FBModel):
-                    try: m.FBDelete()
-                    except: pass
+        try:
+            if hasattr(m, "Name") and m.Name:
+                if m.Name.startswith(prefix) or (hasattr(m, "LongName") and m.LongName and m.LongName.startswith(prefix)):
+                    if isinstance(m, FBModel):
+                        try: m.FBDelete()
+                        except: pass
+        except Exception:
+            pass
                     
     state.models.clear()
     state.bone_data_cache.clear()

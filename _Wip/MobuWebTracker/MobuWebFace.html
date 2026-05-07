@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Saint's Mobu FacialCapture V 1.0</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a1a; color: white; margin: 0; display: flex; flex-direction: column; align-items: center; }
+        #header { width: 100%; background: #333; padding: 15px; text-align: center; border-bottom: 2px solid #0078d4; }
+        #container { position: relative; margin-top: 20px; border-radius: 10px; overflow: hidden; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        #webcam { transform: scaleX(-1); width: 640px; height: 480px; background: #000; }
+        #canvas { position: absolute; left: 0; top: 0; transform: scaleX(-1); width: 640px; height: 480px; }
+        #controls { margin-top: 20px; display: flex; gap: 20px; background: #2a2a2a; padding: 20px; border-radius: 8px; }
+        .status { padding: 5px 15px; border-radius: 20px; font-size: 0.9em; }
+        .connected { background: #1b5e20; color: #a5d6a7; }
+        .disconnected { background: #b71c1c; color: #ef9a9a; }
+        button { background: #0078d4; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #005a9e; }
+        #log { width: 640px; height: 100px; background: #000; font-family: monospace; font-size: 0.8em; overflow-y: auto; margin-top: 10px; padding: 10px; color: #aaa; }
+        .info-box { width: 640px; background: #333; padding: 15px; margin-top: 20px; border-radius: 8px; font-size: 0.9em; text-align: left; border-left: 4px solid #0078d4; }
+        .info-box h3 { margin-top: 0; color: #0078d4; }
+        .info-box ol { padding-left: 20px; color: #ccc; }
+        .footer { margin-top: 30px; margin-bottom: 30px; font-size: 0.8em; color: #666; text-align: center; }
+        .footer a { color: #0078d4; text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<div id="header">
+    <h1>Saint's Mobu FacialCapture V 1.0</h1>
+    <div style="display: flex; justify-content: center; gap: 10px;">
+        <span id="ws-status" class="status disconnected">Bridge: Disconnected</span>
+        <span id="mp-status" class="status disconnected">MediaPipe: Loading...</span>
+    </div>
+</div>
+
+<div id="container">
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+</div>
+
+<div id="controls">
+    <button id="startBtn">Start Camera & Tracking</button>
+    <div>
+        <label><input type="checkbox" id="trackFace" checked> Face (VMC Blend)</label><br>
+        <label><input type="checkbox" id="trackHands" disabled> Hands (開發中...)</label>
+    </div>
+</div>
+
+<div id="log"></div>
+
+<div class="info-box">
+    <h3>Workflow / 操作流程:</h3>
+    <ol>
+        <li>雙擊執行 <b>start_MobuVMC_bridge.bat</b> 開啟 Bridge (Run bridge)</li>
+        <li>點擊本網頁 <b>「Start Camera」</b> 開始擷取臉部資料 (Start Tracking)</li>
+        <li>在 MotionBuilder 開啟 <b>VMC2MOBU</b> 腳本並點擊 <b>Connect</b> (MoBu Connect)</li>
+        <li>在 MoBu 點擊 <b>「Generate Expressions」</b> 生成表情節點 (Generate Nodes)</li>
+        <li>選取角色模型，點擊 <b>「Connect Expression」</b> 完成連結 (Connect Model)</li>
+    </ol>
+</div>
+
+<div class="footer">
+    由小聖腦絲與 Antigravity 協作完成<br>
+    Collaboration by Saint & Antigravity (2026.05)<br>
+    <a href="https://www.facebook.com/hysaint3d.mocap" target="_blank">https://www.facebook.com/hysaint3d.mocap</a>
+</div>
+
+<script type="module">
+    // --- Imports ---
+    import { 
+        FaceLandmarker, 
+        HandLandmarker, 
+        FilesetResolver 
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3";
+
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const logEl = document.getElementById('log');
+    const startBtn = document.getElementById('startBtn');
+    
+    let faceLandmarker;
+    let handLandmarker;
+    let runningMode = "VIDEO";
+    let ws = null;
+    let lastVideoTime = -1;
+    let isTracking = false;
+    let cameraStream = null;
+
+    function log(msg) {
+        const div = document.createElement('div');
+        div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logEl.prepend(div);
+        if (logEl.children.length > 50) logEl.removeChild(logEl.lastChild);
+    }
+
+    // --- WebSocket Setup ---
+    function connectBridge() {
+        ws = new WebSocket('ws://localhost:8080');
+        ws.onopen = () => {
+            document.getElementById('ws-status').className = 'status connected';
+            document.getElementById('ws-status').textContent = 'Bridge: Connected';
+            log("Connected to local bridge.");
+        };
+        ws.onclose = () => {
+            document.getElementById('ws-status').className = 'status disconnected';
+            document.getElementById('ws-status').textContent = 'Bridge: Disconnected';
+            log("Lost connection to bridge. Retrying in 3s...");
+            setTimeout(connectBridge, 3000);
+        };
+    }
+    connectBridge();
+
+    // --- Math Utilities ---
+    function matrixToQuaternion(m) {
+        // m is a 4x4 column-major matrix array (Float32Array)
+        const trace = m[0] + m[5] + m[10];
+        let q = {x:0, y:0, z:0, w:1};
+        if (trace > 0) {
+            let s = 0.5 / Math.sqrt(trace + 1.0);
+            q.w = 0.25 / s;
+            q.x = (m[6] - m[9]) * s;
+            q.y = (m[8] - m[2]) * s;
+            q.z = (m[1] - m[4]) * s;
+        } else {
+            if (m[0] > m[5] && m[0] > m[10]) {
+                let s = 2.0 * Math.sqrt(1.0 + m[0] - m[5] - m[10]);
+                q.w = (m[6] - m[9]) / s;
+                q.x = 0.25 * s;
+                q.y = (m[1] + m[4]) / s;
+                q.z = (m[8] + m[2]) / s;
+            } else if (m[5] > m[10]) {
+                let s = 2.0 * Math.sqrt(1.0 + m[5] - m[0] - m[10]);
+                q.w = (m[8] - m[2]) / s;
+                q.x = (m[1] + m[4]) / s;
+                q.y = 0.25 * s;
+                q.z = (m[6] + m[9]) / s;
+            } else {
+                let s = 2.0 * Math.sqrt(1.0 + m[10] - m[0] - m[5]);
+                q.w = (m[1] - m[4]) / s;
+                q.x = (m[8] + m[2]) / s;
+                q.y = (m[6] + m[9]) / s;
+                q.z = 0.25 * s;
+            }
+        }
+        return q;
+    }
+
+    // --- MediaPipe Setup ---
+    async function initMediaPipe() {
+        try {
+            log("Initializing MediaPipe ESM...");
+            const vision = await FilesetResolver.forVisionTasks(
+                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+            );
+            
+            faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+                baseOptions: { 
+                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task", 
+                    delegate: "GPU" 
+                },
+                outputFaceBlendshapes: true,
+                outputFacialTransformationMatrixes: true,
+                runningMode: runningMode,
+                numFaces: 1
+            });
+
+            handLandmarker = await HandLandmarker.createFromOptions(vision, {
+                baseOptions: { 
+                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task", 
+                    delegate: "GPU" 
+                },
+                minHandDetectionConfidence: 0.3,
+                minHandPresenceConfidence: 0.3,
+                runningMode: runningMode,
+                numHands: 2
+            });
+
+            document.getElementById('mp-status').className = 'status connected';
+            document.getElementById('mp-status').textContent = 'MediaPipe: Ready';
+            log("MediaPipe Ready (Hands on GPU).");
+        } catch (err) {
+            log("MediaPipe Init Error: " + err);
+            console.error(err);
+        }
+    }
+    initMediaPipe();
+
+    // --- Main Loop ---
+    startBtn.addEventListener('click', async () => {
+        if (!isTracking) {
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+                video.srcObject = cameraStream;
+                video.addEventListener('loadeddata', predictWebcam);
+                isTracking = true;
+                startBtn.textContent = "Stop Tracking";
+                startBtn.style.background = "#b71c1c";
+                log("Camera Started.");
+            } catch (err) {
+                log("Error accessing camera: " + err);
+            }
+        } else {
+            isTracking = false;
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+            video.srcObject = null;
+            startBtn.textContent = "Start Camera & Tracking";
+            startBtn.style.background = "#0078d4";
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            log("Tracking Stopped.");
+        }
+    });
+
+    async function predictWebcam() {
+        if (!isTracking) return;
+        if (!video.videoWidth) {
+            window.requestAnimationFrame(predictWebcam);
+            return;
+        }
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (lastVideoTime !== video.currentTime) {
+            lastVideoTime = video.currentTime;
+            const packets = [];
+
+            // Always send Root pos
+            packets.push({
+                addr: "/VMC/Ext/Root/Pos",
+                types: "sfffffff",
+                args: ["Root", 0, 0, 0, 0, 0, 0, 1]
+            });
+
+            // Generic VMC T-Pose Skeleton (Based on standard 170cm Biped proportions)
+            const vmcSkeleton = {
+                "Hips": [0, 0.90, 0], 
+                "Spine": [0, 0.10, 0], 
+                "Chest": [0, 0.15, 0], 
+                "UpperChest": [0, 0.15, 0],
+                "Neck": [0, 0.10, 0], 
+                "Head": [0, 0.10, 0],
+                "LeftShoulder": [0.05, 0.10, 0], 
+                "LeftUpperArm": [0.10, 0, 0], 
+                "LeftLowerArm": [0.25, 0, 0], 
+                "LeftHand": [0.25, 0, 0],
+                "RightShoulder": [-0.05, 0.10, 0], 
+                "RightUpperArm": [-0.10, 0, 0], 
+                "RightLowerArm": [-0.25, 0, 0], 
+                "RightHand": [-0.25, 0, 0],
+                "LeftUpperLeg": [0.10, -0.05, 0], 
+                "LeftLowerLeg": [0, -0.40, 0], 
+                "LeftFoot": [0, -0.40, 0], 
+                "LeftToes": [0, -0.05, 0.15],
+                "RightUpperLeg": [-0.10, -0.05, 0], 
+                "RightLowerLeg": [0, -0.40, 0], 
+                "RightFoot": [0, -0.40, 0], 
+                "RightToes": [0, -0.05, 0.15]
+            };
+
+            let headRot = {x:0, y:0, z:0, w:1};
+            let leftHandPos = vmcSkeleton["LeftHand"];
+            let rightHandPos = vmcSkeleton["RightHand"];
+            let hasFace = false;
+            let hasLeftHand = false;
+            let hasRightHand = false;
+
+            // 1. Face Tracking & Head Rotation
+            if (document.getElementById('trackFace').checked && faceLandmarker) {
+                try {
+                    const t1 = performance.now();
+                    const results = faceLandmarker.detectForVideo(video, t1);
+                    
+                    // Blendshapes
+                    if (results.faceBlendshapes && results.faceBlendshapes.length > 0) {
+                        if (Math.random() > 0.95) log(`Captured ${results.faceBlendshapes[0].categories.length} blendshapes...`);
+                        results.faceBlendshapes[0].categories.forEach(shape => {
+                            if (shape.score !== undefined && shape.score !== null) {
+                                packets.push({ addr: "/VMC/Ext/Blend/Val", types: "sf", args: [shape.categoryName, shape.score] });
+                            }
+                        });
+                        
+                        // Draw Sparse Face
+                        if (results.faceLandmarks && results.faceLandmarks[0]) {
+                            ctx.fillStyle = "#00FF00";
+                            // Dense sparse points for eyes and mouth (~12 points each)
+                            const leftEyeIndices = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
+                            const rightEyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
+                            const lipIndices = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 402, 317, 14, 88];
+                            
+                            [...leftEyeIndices, ...rightEyeIndices, ...lipIndices].forEach(idx => {
+                                const lm = results.faceLandmarks[0][idx];
+                                if (lm) {
+                                    ctx.beginPath(); ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 1.5, 0, 2*Math.PI); ctx.fill();
+                                }
+                            });
+                        }
+                    }
+
+                    // Head Rotation
+                    if (results.facialTransformationMatrixes && results.facialTransformationMatrixes.length > 0) {
+                        const m = results.facialTransformationMatrixes[0];
+                        const q = matrixToQuaternion(m);
+                        headRot = { x: -q.x, y: -q.y, z: q.z, w: q.w };
+                        hasFace = true;
+                    }
+
+                } catch (e) { log("Face Error: " + e.message); console.error("Face Error:", e); }
+            }
+
+            // 2. Hand Tracking
+            if (document.getElementById('trackHands').checked && handLandmarker) {
+                try {
+                    const t2 = performance.now() + 1;
+                    const results = handLandmarker.detectForVideo(video, t2);
+                    if (results.landmarks && results.landmarks.length > 0) {
+                        results.landmarks.forEach((landmark, index) => {
+                            if (!landmark || landmark.length === 0) return;
+                            
+                            let side = index === 0 ? "Left" : "Right";
+                            if (results.handedness && results.handedness[index] && results.handedness[index][0]) {
+                                side = results.handedness[index][0].categoryName === "Left" ? "Right" : "Left"; 
+                            }
+                            
+                            const px = (landmark[0].x - 0.5) * 100;
+                            const py = (0.5 - landmark[0].y) * 100;
+                            const pz = landmark[0].z * 100;
+
+                            if (side === "Left") {
+                                leftHandPos = [px, py, pz];
+                                hasLeftHand = true;
+                            } else {
+                                rightHandPos = [px, py, pz];
+                                hasRightHand = true;
+                            }
+
+                            ctx.fillStyle = side === "Left" ? "#FF0000" : "#0000FF";
+                            landmark.forEach(lm => {
+                                ctx.beginPath(); ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 4, 0, 2*Math.PI); ctx.fill();
+                            });
+                        });
+                        if (Math.random() > 0.95) log(`Tracking ${results.landmarks.length} hands...`);
+                    }
+                } catch (e) { log("Hand Error: " + e.message); console.error("Hand Error:", e); }
+            }
+
+            // Assemble Full Skeleton Packets
+            for (const [bone, pos] of Object.entries(vmcSkeleton)) {
+                let r = {x:0, y:0, z:0, w:1};
+                let p = pos;
+                
+                if (bone === "Head" && hasFace) r = headRot;
+                if (bone === "LeftHand" && hasLeftHand) p = leftHandPos;
+                if (bone === "RightHand" && hasRightHand) p = rightHandPos;
+
+                packets.push({
+                    addr: "/VMC/Ext/Bone/Pos",
+                    types: "sfffffff",
+                    args: [bone, p[0], p[1], p[2], r.x, r.y, r.z, r.w]
+                });
+            }
+
+            if (packets.length > 0 && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(packets));
+            }
+        }
+        window.requestAnimationFrame(predictWebcam);
+    }
+</script>
+</body>
+</html>
