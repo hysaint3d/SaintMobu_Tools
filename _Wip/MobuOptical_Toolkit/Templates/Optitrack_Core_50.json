@@ -52,5 +52,29 @@
     "RightFoot": ["RHeel", "RToeOut", "RToeIn", "RToeTip"],
     "LeftToe": ["LToeTip"],
     "RightToe": ["RToeTip"]
+  },
+  "FittingMarkers": {
+    "HeadTop": ["HeadTop"],
+    "Waist": ["WaistLFront", "WaistRFront", "WaistLBack", "WaistRBack"],
+    "LeftKnee": ["LKneeOut"],
+    "RightKnee": ["RKneeOut"],
+    "LeftAnkle": ["LAnkleOut"],
+    "RightAnkle": ["RAnkleOut"],
+    "LeftElbow": ["LElbowOut"],
+    "RightElbow": ["RElbowOut"],
+    "LeftWrist": ["LWristIn", "LWristOut"],
+    "RightWrist": ["RWristIn", "RWristOut"],
+    "LeftShoulder": ["LShoulderTop"],
+    "RightShoulder": ["RShoulderTop"]
+  },
+  "FittingRules": {
+    "BaseHeightCm": 170.0,
+    "HipsOffset": [0.0, -10, -10.0],
+    "HeadHeightOffset": 10.0,
+    "ShoulderHeightRatio": 0.8,
+    "UpperLegRatio": 0.48,
+    "LowerLegRatio": 0.52,
+    "UpperArmRatio": 0.45,
+    "LowerArmRatio": 0.55
   }
 }

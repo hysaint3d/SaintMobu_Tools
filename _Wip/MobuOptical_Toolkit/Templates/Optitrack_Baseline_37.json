@@ -41,5 +41,16 @@
     "RightLeg": ["RShin", "RAnkleOut", "RKneeOut"],
     "LeftFoot": ["LToeOut", "LToeIn", "LAnkleOut"],
     "RightFoot": ["RToeOut", "RToeIn", "RAnkleOut"]
+  },
+  "FittingMarkers": {
+    "HeadTop": ["HeadTop", "HeadFront"],
+    "Waist": ["WaistLFront", "WaistRFront", "WaistLBack", "WaistRBack"],
+    "LeftAnkle": ["LAnkleOut"],
+    "RightAnkle": ["RAnkleOut"]
+  },
+  "FittingRules": {
+    "BaseHeightCm": 170.0,
+    "HipsOffset": [0.0, -10.0, -10.0],
+    "HeadHeightOffset": 10.0
   }
 }

@@ -57,5 +57,16 @@
     "RightHandMiddle1": ["RMID6"],
     "RightHandRing1": ["RRNG6"],
     "RightHandPinky1": ["RPNK6"]
+  },
+  "FittingMarkers": {
+    "HeadTop": ["LFHD", "RFHD", "LBHD", "RBHD"],
+    "Waist": ["LFWT", "RFWT", "LBWT", "RBWT"],
+    "LeftAnkle": ["LANK"],
+    "RightAnkle": ["RANK"]
+  },
+  "FittingRules": {
+    "BaseHeightCm": 170.0,
+    "HipsOffset": [0.0, -10.0, -10.0],
+    "HeadHeightOffset": 10.0
   }
 }
