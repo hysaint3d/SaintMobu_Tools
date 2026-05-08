@@ -23,6 +23,7 @@ import json
 # ── Global Settings & Mapping ──────────────────────────────────────────────────
 g_ui = {}
 g_templates = []
+g_active_optical_root_name = None
 
 ID_MAP = {
     "Reference": FBSkeletonNodeId.kFBSkeletonReferenceIndex,
@@ -112,6 +113,11 @@ def create_guide(name, pos, color=(1, 0, 0)):
 
 # ── Actions ────────────────────────────────────────────────────────────────────
 
+def match_prefix(name, prefix):
+    if not prefix: return True
+    if prefix.endswith(":") or prefix.endswith("_"): return prefix in name
+    return (prefix + ":") in name or (prefix + "_") in name or name == prefix
+
 def OnImportClick(control, event):
     file_popup = FBFilePopup()
     file_popup.Style = FBFilePopupStyle.kFBFilePopupOpen
@@ -123,7 +129,21 @@ def OnImportClick(control, event):
 def OnCreateRigidClick(control, event):
     roots = get_optical_roots()
     if not roots: status("No Optical Data!"); return
-    optical = roots[0]; created = 0
+    
+    optical = roots[0]
+    global g_active_optical_root_name
+    if g_active_optical_root_name:
+        for r in roots:
+            if r.LongName == g_active_optical_root_name:
+                optical = r; break
+                
+    prefix = g_ui["edit_prefix"].Text
+    if prefix and not g_active_optical_root_name:
+        for r in roots:
+            if any(match_prefix(m.Name, prefix) for m in r.Children):
+                optical = r; break
+                
+    created = 0
     
     idx = g_ui["list_template"].ItemIndex
     if idx < 0 or idx >= len(g_templates):
@@ -131,14 +151,24 @@ def OnCreateRigidClick(control, event):
         
     template = g_templates[idx]
     rigid_groups = template.get("RigidBodies", {})
+    prefix = g_ui["edit_prefix"].Text
     
     for g_name, m_names in rigid_groups.items():
-        mlist = [m for m in optical.Children if m.Name.split(":")[-1].replace("_", " ").split()[-1] in m_names]
+        mlist = []
+        for m in optical.Children:
+            if not match_prefix(m.LongName, prefix): continue
+            
+            clean_m_name = m.Name.split(":")[-1].replace("_", " ").split()[-1]
+            if clean_m_name in m_names:
+                mlist.append(m)
+                
         if len(mlist) >= 3:
-            if optical.CreateRigidBody(g_name, mlist): 
+            clean_prefix = prefix.replace(":", "_").replace(" ", "").strip("_")
+            rb_name = "{}_{}".format(clean_prefix, g_name) if clean_prefix else g_name
+            if optical.CreateRigidBody(rb_name, mlist): 
                 created += 1
                         
-    status("Created {} Rigid Bodies.".format(created))
+    status("Created {} Rigid Bodies (Prefix: '{}').".format(created, prefix))
 
 def OnAnalyzeQualityClick(control, event):
     roots = get_optical_roots()
@@ -163,9 +193,10 @@ def OnAnalyzeQualityClick(control, event):
     else:
         status("Analysis complete.")
 
-def get_marker_pos(optical, names, fuzzy=False):
+def get_marker_pos(optical, names, prefix="", fuzzy=False):
     pts = []
     for m in optical.Children:
+        if not match_prefix(m.LongName, prefix): continue
         clean_name = m.Name.split(":")[-1].replace("_", "")
         low_name = clean_name.lower()
         if clean_name in names or m.Name.split(":")[-1] in names:
@@ -184,14 +215,27 @@ def get_marker_pos(optical, names, fuzzy=False):
     return None
 
 def OnCreateAndFitClick(control, event):
-    # 1. Ensure Actor exists
-    actor_name = "Optical_Actor"
+    prefix_raw = g_ui["edit_prefix"].Text
+    prefix_clean = prefix_raw.replace(":", "_").replace(" ", "").strip("_")
+    actor_name = "Actor_{}".format(prefix_clean) if prefix_clean else "Optical_Actor"
+    
     actor = next((a for a in FBSystem().Scene.Actors if a.Name == actor_name), None)
     if not actor: actor = FBActor(actor_name)
     
     roots = get_optical_roots()
     if not roots: status("No Optical Data!"); return
+    
     optical = roots[0]
+    global g_active_optical_root_name
+    if g_active_optical_root_name:
+        for r in roots:
+            if r.LongName == g_active_optical_root_name:
+                optical = r; break
+                
+    if prefix_raw and not g_active_optical_root_name:
+        for r in roots:
+            if any(match_prefix(m.Name, prefix_raw) for m in r.Children):
+                optical = r; break
     
     idx = g_ui["list_template"].ItemIndex
     if idx < 0 or idx >= len(g_templates):
@@ -204,7 +248,7 @@ def OnCreateAndFitClick(control, event):
     r_hips_offset = rules.get("HipsOffset", [0.0, -10.0, -4.0]) 
     r_head_offset = rules.get("HeadHeightOffset", 10.0) 
     
-    def get_pm(key, defaults): return get_marker_pos(optical, f_markers.get(key, defaults), fuzzy=True)
+    def get_pm(key, defaults): return get_marker_pos(optical, f_markers.get(key, defaults), prefix=prefix_raw, fuzzy=True)
     
     p_head = get_pm("HeadTop", ["HeadTop", "HeadFront"])
     p_waist = get_pm("Waist", ["WaistLFront", "WaistRFront", "WaistLBack", "WaistRBack", "LASI", "RASI"])
@@ -298,54 +342,64 @@ def OnCreateAndFitClick(control, event):
     status("Actor Scaled (Proportional) & Positioned.")
 
 def OnAutoMapClick(control, event):
-    actor = next((a for a in FBSystem().Scene.Actors if a.Name == "Optical_Actor"), None)
+    prefix_raw = g_ui["edit_prefix"].Text
+    prefix_clean = prefix_raw.replace(":", "_").replace(" ", "").strip("_")
+    actor_name = "Actor_{}".format(prefix_clean) if prefix_clean else "Optical_Actor"
+    ms_name = "MarkerSet_{}".format(prefix_clean) if prefix_clean else "Optical_MarkerSet"
+    
+    actor = next((a for a in FBSystem().Scene.Actors if a.Name == actor_name), None)
     roots = get_optical_roots()
     if not actor or not roots: status("Missing Actor/Data!"); return
-    optical = roots[0]
     
-    ms_name = "Optical_MarkerSet"
+    optical = roots[0]
+    global g_active_optical_root_name
+    if g_active_optical_root_name:
+        for r in roots:
+            if r.LongName == g_active_optical_root_name:
+                optical = r; break
+                
+    if prefix_raw and not g_active_optical_root_name:
+        for r in roots:
+            if any(match_prefix(m.Name, prefix_raw) for m in r.Children):
+                optical = r; break
+    
     markerset = next((ms for ms in FBSystem().Scene.MarkerSets if ms.Name == ms_name), None)
     if not markerset: markerset = FBMarkerSet(ms_name)
     actor.MarkerSet = markerset
     
     for p in markerset.PropertyList:
-        if hasattr(p, "removeAll"): p.removeAll()
-    
+        if hasattr(p, "removeAll"):
+            p.removeAll()
+            
     template_idx = g_ui["list_template"].ItemIndex
-    if template_idx < 0 or template_idx >= len(g_templates):
-        status("Select a template first."); return
-        
+    if template_idx < 0 or template_idx >= len(g_templates): status("Select template."); return
     mapping = g_templates[template_idx].get("ActorMapping", {})
     match_count = 0
     
     for slot_name, potential_names in mapping.items():
         if slot_name == "Reference":
-            try:
-                markerset.AddMarker(FBSkeletonNodeId.kFBSkeletonReferenceIndex, optical)
-                print(">>> Assigned Reference via AddMarker")
-            except Exception as e:
-                print(">>> AddMarker Ref error:", e)
-                
+            try: markerset.AddMarker(FBSkeletonNodeId.kFBSkeletonReferenceIndex, optical)
+            except: pass
             for p in actor.PropertyList:
                 if "reference" in p.Name.lower() or "ref" in p.Name.lower():
-                    try: p.removeAll(); p.append(optical); print(">>> Mapped Actor prop:", p.Name)
-                    except: pass
-            for p in markerset.PropertyList:
-                if "reference" in p.Name.lower() or "ref" in p.Name.lower():
-                    try: p.removeAll(); p.append(optical); print(">>> Mapped MarkerSet prop:", p.Name)
+                    try: p.removeAll(); p.append(optical)
                     except: pass
             continue
             
         node_id = ID_MAP.get(slot_name)
         if node_id is not None:
             for marker in optical.Children:
+                if not match_prefix(marker.LongName, prefix_raw): continue
                 if marker.Name.split(":")[-1].replace("_", " ").split()[-1] in potential_names:
                     try: markerset.AddMarker(node_id, marker); match_count += 1
                     except: pass
-    FBSystem().Scene.Evaluate(); status("Mapped {} markers.".format(match_count))
+    FBSystem().Scene.Evaluate(); status("Mapped {} markers (Prefix: '{}').".format(match_count, prefix_raw))
 
 def OnActivateClick(control, event):
-    actor = next((a for a in FBSystem().Scene.Actors if a.Name == "Optical_Actor"), None)
+    prefix_raw = g_ui["edit_prefix"].Text
+    prefix_clean = prefix_raw.replace(":", "_").replace(" ", "").strip("_")
+    actor_name = "Actor_{}".format(prefix_clean) if prefix_clean else "Optical_Actor"
+    actor = next((a for a in FBSystem().Scene.Actors if a.Name == actor_name), None)
     if actor: set_prop(actor, "Active", True); status("Actor Activated.")
 
 def OnDeleteUnlabeledClick(control, event):
@@ -366,7 +420,7 @@ def ApplyFilterToSelectedMarkers(filter_name):
     selected_models = FBModelList()
     FBGetSelectedModels(selected_models)
     
-    optical_markers = [m for m in selected_models if isinstance(m, FBModelMarker)]
+    optical_markers = [m for m in selected_models if hasattr(m, "Translation")]
     if not optical_markers:
         status("Please select optical markers first.")
         return
@@ -395,6 +449,86 @@ def OnPeakRemovalClick(control, event):
 def OnButterworthClick(control, event):
     ApplyFilterToSelectedMarkers("Butterworth")
 
+def OnAnalyzeSwapsClick(control, event):
+    selected_models = FBModelList()
+    FBGetSelectedModels(selected_models)
+    
+    # Identify Targets
+    target_sets = []
+    
+    for m in selected_models:
+        if m.ClassName() == "FBRigidBody":
+            markers = [item for item in m.Items if hasattr(item, "Translation")]
+            if len(markers) >= 2:
+                target_sets.append((m.Name, markers))
+    
+    if not target_sets:
+        markers = [m for m in selected_models if hasattr(m, "Translation")]
+        if len(markers) >= 2:
+            target_sets.append(("Selected", markers))
+            
+    if not target_sets:
+        status("Please select a RigidBody or at least TWO markers.")
+        return
+        
+    player = FBPlayerControl()
+    start_frame = player.ZoomWindowStart.GetFrame()
+    end_frame = player.ZoomWindowStop.GetFrame()
+    
+    if start_frame >= end_frame:
+        status("Invalid timeline range."); return
+        
+    if "list_swaps" in g_ui:
+        g_ui["list_swaps"].Items.removeAll()
+        g_ui["list_swaps"].Items.append("Scanning... (Frame {} to {})".format(start_frame, end_frame))
+    # Removed FBSystem().ProcessEvents() as it's not supported in all MoBu versions
+
+    abnormal_results = []
+    threshold = 5.0 # cm jump
+    
+    orig_time = FBSystem().LocalTime
+    step_time = FBTime(0,0,0,1,0)
+    
+    for set_name, markers in target_sets:
+        prev_distances = {}
+        curr_time = FBTime(player.ZoomWindowStart)
+        
+        while curr_time.GetFrame() <= end_frame:
+            player.Goto(curr_time)
+            FBSystem().Scene.Evaluate()
+            
+            curr_distances = {}
+            for i in range(len(markers)):
+                for j in range(i+1, len(markers)):
+                    p1, p2 = FBVector3d(), FBVector3d()
+                    markers[i].GetVector(p1); markers[j].GetVector(p2)
+                    d = math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2 + (p1[2]-p2[2])**2)
+                    curr_distances[(i, j)] = d
+            
+            if prev_distances:
+                max_delta = 0
+                for pair, d in curr_distances.items():
+                    delta = abs(d - prev_distances[pair])
+                    if delta > max_delta: max_delta = delta
+                
+                if max_delta > threshold:
+                    abnormal_results.append("F {}: {} ({:.1f}cm)".format(curr_time.GetFrame(), set_name, max_delta))
+            
+            prev_distances = curr_distances
+            curr_time += step_time
+            
+    player.Goto(orig_time)
+    FBSystem().Scene.Evaluate()
+    
+    if "list_swaps" in g_ui:
+        g_ui["list_swaps"].Items.removeAll()
+        if abnormal_results:
+            for res in abnormal_results: g_ui["list_swaps"].Items.append(res)
+            status("Found {} issues!".format(len(abnormal_results)))
+        else:
+            g_ui["list_swaps"].Items.append("No issues detected.")
+            status("Clean!")
+
 def OnSetPostProcessClick(control, event):
     selected_models = FBModelList()
     FBGetSelectedModels(selected_models)
@@ -420,9 +554,13 @@ def OnSmoothClick(control, event):
 
 def OnResetClick(control, event):
     for a in list(FBSystem().Scene.Actors):
-        if a.Name == "Optical_Actor": a.FBDelete()
+        if a.Name.startswith("Actor_") or a.Name == "Optical_Actor": a.FBDelete()
     for ms in list(FBSystem().Scene.MarkerSets):
-        if ms.Name == "Optical_MarkerSet": ms.FBDelete()
+        if ms.Name.startswith("MarkerSet_") or ms.Name == "Optical_MarkerSet": ms.FBDelete()
+        
+    for root in get_optical_roots():
+        for rb in list(root.RigidBodies):
+            rb.FBDelete()
     
     # Safely delete Guide Nulls under RootModel
     for m in list(FBSystem().Scene.RootModel.Children):
@@ -438,17 +576,21 @@ def PopulateTool(tool):
     tool.StartSizeX = 280; tool.StartSizeY = 550
     
     tabs = FBTabPanel()
-    tabs.Items.append("Actor")
+    tabs.Items.append("Actor Mapping")
+    tabs.Items.append("Labeling")
     tabs.Items.append("DataClean")
     
     lyt_actor = FBVBoxLayout()
-    lyt_analysis = FBVBoxLayout()
+    lyt_labeling = FBVBoxLayout()
+    lyt_dataclean = FBVBoxLayout()
     
     def on_tab_change(control, event):
         if control.ItemIndex == 0:
             tool.SetControl("main", lyt_actor)
+        elif control.ItemIndex == 1:
+            tool.SetControl("main", lyt_labeling)
         else:
-            tool.SetControl("main", lyt_analysis)
+            tool.SetControl("main", lyt_dataclean)
     tabs.OnChange.Add(on_tab_change)
     
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft, "")
@@ -474,9 +616,50 @@ def PopulateTool(tool):
         l = FBLabel(); l.Caption = txt; 
         l.Justify = FBTextJustify.kFBTextJustifyCenter
         return l
+        
+    def OnGetPrefixClick(control, event):
+        selected_models = FBModelList()
+        FBGetSelectedModels(selected_models)
+        
+        if len(selected_models) > 0:
+            m = selected_models[0]
+            # 簡單直接：從選取的光點的 LongName 提取 Namespace / Prefix
+            target_name = m.LongName
+            if ":" in target_name: prefix = target_name.rsplit(":", 1)[0]
+            elif "_" in target_name: prefix = target_name.rsplit("_", 1)[0]
+            else: prefix = ""
+            
+            # 記住這個光點的父節點 (Root)，確保就算 Prefix 空白也能找到正確資料
+            global g_active_optical_root_name
+            if hasattr(m, "Parent") and m.Parent:
+                g_active_optical_root_name = m.Parent.LongName
+            else:
+                g_active_optical_root_name = m.LongName # Fallback if it is root
+                
+            g_ui["edit_prefix"].Text = prefix
+            
+            msg = "Prefix: " + (prefix if prefix else "None")
+            status("Target set. " + msg)
+            return
+            
+        status("Please select an optical marker (point).")
 
     # --- ACTOR TAB ---
-    lyt_actor.Add(lbl("1. Data & Template Selection"), 20)
+    lyt_actor.Add(lbl("1. Import Optical Data"), 20)
+    lyt_actor.Add(btn("Import Optical Data", OnImportClick), 35)
+    
+    lyt_actor.Add(lbl("2. Target Character Prefix"), 20)
+    
+    lyt_pre = FBHBoxLayout()
+    lyt_pre.Add(lbl("Prefix:"), 60)
+    g_ui["edit_prefix"] = FBEdit()
+    g_ui["edit_prefix"].Text = ""
+    lyt_pre.Add(g_ui["edit_prefix"], 80)
+    btn_get_prefix = btn("Get Selected", OnGetPrefixClick)
+    lyt_pre.Add(btn_get_prefix, 80)
+    lyt_actor.Add(lyt_pre, 25)
+    
+    lyt_actor.Add(lbl("3. Template Selection"), 20)
     lyt_temp = FBHBoxLayout(); lyt_temp.Add(lbl("Template:"), 60)
     g_ui["list_template"] = FBList()
     
@@ -490,9 +673,7 @@ def PopulateTool(tool):
         
     lyt_temp.Add(g_ui["list_template"], 140); lyt_actor.Add(lyt_temp, 25)
     
-    lyt_actor.Add(btn("Import Optical Data", OnImportClick), 35)
-    
-    lyt_actor.Add(lbl("2. Rigid Bodies & Actor"), 20)
+    lyt_actor.Add(lbl("4. Rigid Bodies & Actor"), 20)
     
     lyt_actor.Add(btn("Create Rigid Bodies", OnCreateRigidClick), 35)
     lyt_actor.Add(btn("Create & Fit Actor", OnCreateAndFitClick), 45)
@@ -506,25 +687,48 @@ def PopulateTool(tool):
     
     g_ui["lbl_status"] = FBLabel(); g_ui["lbl_status"].Caption = "Status: Ready."; lyt_actor.Add(g_ui["lbl_status"], 30)
 
-    # --- DATACLEAN TAB ---
-    lyt_analysis.Add(lbl("1. Label"), 20)
-    lyt_analysis.Add(lbl("(Manual Labeling in Viewer)"), 15)
+    # --- LABELING TAB ---
+    lyt_labeling.Add(lbl("1. Manual Labeling"), 20)
+    lyt_labeling.Add(lbl("(Manual Labeling in Viewer)"), 15)
     
-    lyt_analysis.Add(lbl("2. Filter"), 20)
-    lyt_analysis.Add(btn("Set PostProcess", OnSetPostProcessClick), 35)
-    lyt_analysis.Add(lbl("轉換為動態曲線 (Set Done)"), 15)
+    lyt_labeling.Add(lbl("2. Swap Analysis"), 20)
+    lyt_labeling.Add(btn("Analyze Rigid Stability", OnAnalyzeSwapsClick), 35)
+    lyt_labeling.Add(lbl("請選取 RigidBody 或兩顆以上光點"), 15)
     
-    lyt_analysis.Add(btn("Peak Removal", OnPeakRemovalClick), 35)
-    lyt_analysis.Add(lbl("消除突刺雜訊"), 15)
+    lyt_labeling.Add(lbl("Analysis Results (click to jump):"), 20)
+    g_ui["list_swaps"] = FBList()
     
-    lyt_analysis.Add(btn("Butterworth", OnButterworthClick), 35)
-    lyt_analysis.Add(lbl("消除高頻，保留主要動態"), 15)
-    
-    lyt_analysis.Add(btn("Smooth", OnSmoothClick), 35)
-    lyt_analysis.Add(lbl("平滑曲線，平順降低動態"), 15)
+    def OnSwapListClick(control, event):
+        idx = control.ItemIndex
+        if idx < 0: return
+        item_text = control.Items[idx]
+        try:
+            # Format: "F 123: Name (5.1cm)"
+            frame_str = item_text.split("F ")[1].split(":")[0].strip()
+            frame = int(frame_str)
+            t = FBTime(0, 0, 0, frame, 0)
+            FBPlayerControl().Goto(t)
+        except:
+            pass
+    g_ui["list_swaps"].OnChange.Add(OnSwapListClick)
+    lyt_labeling.Add(g_ui["list_swaps"], 120)
 
-    lyt_analysis.Add(lbl("3. Data"), 20)
-    lyt_analysis.Add(btn("Delete Unlabeled Markers", OnDeleteUnlabeledClick), 35)
+    # --- DATACLEAN TAB ---
+    lyt_dataclean.Add(lbl("1. Filter"), 20)
+    lyt_dataclean.Add(btn("Set PostProcess", OnSetPostProcessClick), 35)
+    lyt_dataclean.Add(lbl("轉換為動態曲線 (Set Done)"), 15)
+    
+    lyt_dataclean.Add(btn("Peak Removal", OnPeakRemovalClick), 35)
+    lyt_dataclean.Add(lbl("消除突刺雜訊"), 15)
+    
+    lyt_dataclean.Add(btn("Butterworth", OnButterworthClick), 35)
+    lyt_dataclean.Add(lbl("消除高頻，保留主要動態"), 15)
+    
+    lyt_dataclean.Add(btn("Smooth", OnSmoothClick), 35)
+    lyt_dataclean.Add(lbl("平滑曲線，平順降低動態"), 15)
+
+    lyt_dataclean.Add(lbl("2. Data Cleanup"), 20)
+    lyt_dataclean.Add(btn("Delete Unlabeled Markers", OnDeleteUnlabeledClick), 35)
 def CreateTool():
     t = FBCreateUniqueTool("MobuOptical_Toolkit")
     if t: PopulateTool(t); ShowTool(t)
