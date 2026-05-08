@@ -146,6 +146,27 @@
             margin-left: 10px;
             font-weight: bold;
         }
+
+        .mode-btn {
+            padding: 5px 12px;
+            font-size: 0.85em;
+            background: #444;
+            color: #ccc;
+            border: 1px solid #555;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .mode-btn:hover {
+            background: #555;
+            color: white;
+        }
+
+        .mode-btn.active {
+            background: #0078d4;
+            color: white;
+            border-color: #008cff;
+        }
     </style>
 </head>
 
@@ -166,9 +187,17 @@
 
     <div id="controls">
         <button id="startBtn">Start Camera & Tracking</button>
-        <div>
+        <div style="border-left: 1px solid #444; padding-left: 15px;">
             <label><input type="checkbox" id="trackFace" checked> Face (VMC Blend)</label><br>
             <label><input type="checkbox" id="trackHands" disabled> Hands (開發中...)</label>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px; border-left: 1px solid #444; padding-left: 15px;">
+            <span style="font-size: 0.75em; color: #888; text-transform: uppercase; letter-spacing: 1px;">Points Display:</span>
+            <div style="display: flex; gap: 5px;">
+                <button class="mode-btn" data-mode="all">全部點</button>
+                <button class="mode-btn" data-mode="quarter">1/4點</button>
+                <button class="mode-btn active" data-mode="features">眼口特徵</button>
+            </div>
         </div>
     </div>
 
@@ -214,6 +243,7 @@
         let lastVideoTime = -1;
         let isTracking = false;
         let cameraStream = null;
+        let displayMode = "features";
 
         function log(msg) {
             const div = document.createElement('div');
@@ -342,6 +372,16 @@
             }
         });
 
+        // --- Mode Switching ---
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                displayMode = btn.dataset.mode;
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                log(`Display Mode: ${displayMode}`);
+            });
+        });
+
         async function predictWebcam() {
             if (!isTracking) return;
             if (!video.videoWidth) {
@@ -412,20 +452,32 @@
                                 }
                             });
 
-                            // Draw Sparse Face
+                            // Draw Face Landmarks based on mode
                             if (results.faceLandmarks && results.faceLandmarks[0]) {
                                 ctx.fillStyle = "#00FF00";
-                                // Dense sparse points for eyes and mouth (~12 points each)
-                                const leftEyeIndices = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
-                                const rightEyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
-                                const lipIndices = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 402, 317, 14, 88];
+                                const allLandmarks = results.faceLandmarks[0];
 
-                                [...leftEyeIndices, ...rightEyeIndices, ...lipIndices].forEach(idx => {
-                                    const lm = results.faceLandmarks[0][idx];
-                                    if (lm) {
-                                        ctx.beginPath(); ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 1.5, 0, 2 * Math.PI); ctx.fill();
-                                    }
-                                });
+                                if (displayMode === "all") {
+                                    allLandmarks.forEach(lm => {
+                                        ctx.beginPath(); ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 1, 0, 2 * Math.PI); ctx.fill();
+                                    });
+                                } else if (displayMode === "quarter") {
+                                    allLandmarks.forEach((lm, i) => {
+                                        if (i % 4 === 0) {
+                                            ctx.beginPath(); ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 1.2, 0, 2 * Math.PI); ctx.fill();
+                                        }
+                                    });
+                                } else if (displayMode === "features") {
+                                    const leftEyeIndices = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
+                                    const rightEyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
+                                    const lipIndices = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 402, 317, 14, 88];
+                                    [...leftEyeIndices, ...rightEyeIndices, ...lipIndices].forEach(idx => {
+                                        const lm = allLandmarks[idx];
+                                        if (lm) {
+                                            ctx.beginPath(); ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 1.5, 0, 2 * Math.PI); ctx.fill();
+                                        }
+                                    });
+                                }
                             }
                         }
 
