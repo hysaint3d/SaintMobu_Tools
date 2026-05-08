@@ -61,6 +61,7 @@ class MobuBridgeGUI:
         self.server = None
         self.is_running = False
         self.packet_count = 0
+        self.local_ip = self.get_local_ip()
         
         self.style = ttk.Style()
         self.style.theme_use('clam')
@@ -117,6 +118,14 @@ class MobuBridgeGUI:
 
         config_frame.columnconfigure(1, weight=1)
 
+        # Local IP Display
+        ip_frame = ttk.Frame(main_frame)
+        ip_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(ip_frame, text="Your Computer IP:", font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        self.ip_display = ttk.Label(ip_frame, text=self.local_ip, font=("Segoe UI", 10, "bold"), foreground="#a5d6a7")
+        self.ip_display.pack(side=tk.LEFT, padx=5)
+        ttk.Label(ip_frame, text="(Use this on iPad)", font=("Segoe UI", 8, "italic"), foreground="#888").pack(side=tk.LEFT)
+
         # Controls
         self.btn_toggle = ttk.Button(main_frame, text="START BRIDGE", style="TButton", command=self.toggle_bridge)
         self.btn_toggle.pack(fill=tk.X, pady=20)
@@ -141,6 +150,17 @@ class MobuBridgeGUI:
     def log(self, message):
         self.log_area.insert(tk.END, f"{message}\n")
         self.log_area.see(tk.END)
+
+    def get_local_ip(self):
+        try:
+            # Create a dummy socket to find the preferred interface IP
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            return "127.0.0.1"
 
     def toggle_bridge(self):
         if not self.is_running:
@@ -200,7 +220,7 @@ class MobuBridgeGUI:
                 self.root.after(0, lambda: self.log(f"!!! WS Error: {e}"))
 
         async def start_ws():
-            async with websockets.serve(handler, "localhost", self.ws_port):
+            async with websockets.serve(handler, "0.0.0.0", self.ws_port):
                 await asyncio.Future()
 
         try:
