@@ -225,7 +225,7 @@ class MobuBridgeGUI:
 
         self.save_config()
         self.is_running = True
-        self.btn_toggle.configure(text="STOP BRIDGE")
+        self.btn_toggle.configure(text="STOP BRIDGE", style="Stop.TButton")
         self.packet_count = 0
         self.log(f">>> Bridge Started (Mode: {self.mode_var.get()})")
         self.log(f">>> Listening on WS:{self.ws_port}")
@@ -236,9 +236,9 @@ class MobuBridgeGUI:
 
     def stop_bridge(self):
         self.is_running = False
-        if self.loop:
-            self.loop.call_soon_threadsafe(self.loop.stop)
-        self.btn_toggle.configure(text="START BRIDGE")
+        if self.loop and self.server_task:
+            self.loop.call_soon_threadsafe(self.server_task.cancel)
+        self.btn_toggle.configure(text="START BRIDGE", style="Start.TButton")
         self.log(">>> Bridge Stopped.")
 
     def run_async_loop(self):
@@ -266,15 +266,27 @@ class MobuBridgeGUI:
             except Exception as e:
                 self.root.after(0, lambda err=e: self.log(f"!!! WS Error: {err}"))
 
-        async def start_ws():
+        async def main_task():
             async with websockets.serve(handler, "0.0.0.0", self.ws_port):
-                await asyncio.Future()
+                await asyncio.Future()  # Run forever until cancelled
 
+        self.server_task = self.loop.create_task(main_task())
+        
         try:
-            self.loop.run_until_complete(start_ws())
+            self.loop.run_until_complete(self.server_task)
+        except asyncio.CancelledError:
+            pass
         except Exception as e:
             if self.is_running:
                 self.root.after(0, lambda err=e: self.log(f"!!! Loop Error: {err}"))
+        finally:
+            # Allow clean shutdown of the server
+            pending = asyncio.all_tasks(self.loop)
+            if pending:
+                self.loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            self.loop.close()
+            self.loop = None
+            self.server_task = None
 
 if __name__ == "__main__":
     root = tk.Tk()
