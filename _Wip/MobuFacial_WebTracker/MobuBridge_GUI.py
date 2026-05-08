@@ -61,6 +61,7 @@ class MobuBridgeGUI:
         self.server = None
         self.is_running = False
         self.packet_count = 0
+        self.config_file = os.path.join(os.path.dirname(__file__), "bridge_config.json")
         self.local_ip = self.get_local_ip()
         
         self.style = ttk.Style()
@@ -68,6 +69,35 @@ class MobuBridgeGUI:
         self.setup_styles()
         
         self.create_widgets()
+        self.load_config()
+
+    def load_config(self):
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r') as f:
+                    config = json.load(f)
+                    self.mode_var.set(config.get("mode", "VMC"))
+                    self.ip_entry.delete(0, tk.END)
+                    self.ip_entry.insert(0, config.get("target_ip", "127.0.0.1"))
+                    self.port_entry.delete(0, tk.END)
+                    self.port_entry.insert(0, config.get("target_port", "39539"))
+                    self.ws_port_entry.delete(0, tk.END)
+                    self.ws_port_entry.insert(0, config.get("ws_port", "8080"))
+        except Exception as e:
+            print(f"Error loading config: {e}")
+
+    def save_config(self):
+        try:
+            config = {
+                "mode": self.mode_var.get(),
+                "target_ip": self.ip_entry.get(),
+                "target_port": self.port_entry.get(),
+                "ws_port": self.ws_port_entry.get()
+            }
+            with open(self.config_file, 'w') as f:
+                json.dump(config, f)
+        except Exception as e:
+            print(f"Error saving config: {e}")
 
     def setup_styles(self):
         self.style.configure("TFrame", background="#2b2b2b")
@@ -121,10 +151,17 @@ class MobuBridgeGUI:
         # Local IP Display
         ip_frame = ttk.Frame(main_frame)
         ip_frame.pack(fill=tk.X, pady=5)
-        ttk.Label(ip_frame, text="Your Computer IP:", font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        ttk.Label(ip_frame, text="Your IP:", font=("Segoe UI", 9)).pack(side=tk.LEFT)
         self.ip_display = ttk.Label(ip_frame, text=self.local_ip, font=("Segoe UI", 10, "bold"), foreground="#a5d6a7")
         self.ip_display.pack(side=tk.LEFT, padx=5)
-        ttk.Label(ip_frame, text="(Use this on iPad)", font=("Segoe UI", 8, "italic"), foreground="#888").pack(side=tk.LEFT)
+        
+        btn_copy = ttk.Button(ip_frame, text="Copy", width=6, command=self.copy_ip)
+        btn_copy.pack(side=tk.LEFT, padx=2)
+        
+        btn_refresh = ttk.Button(ip_frame, text="↻", width=3, command=self.refresh_ip)
+        btn_refresh.pack(side=tk.LEFT, padx=2)
+        
+        ttk.Label(ip_frame, text="(Use on iPad)", font=("Segoe UI", 8, "italic"), foreground="#888").pack(side=tk.LEFT, padx=5)
 
         # Controls
         self.btn_toggle = ttk.Button(main_frame, text="START BRIDGE", style="TButton", command=self.toggle_bridge)
@@ -153,7 +190,6 @@ class MobuBridgeGUI:
 
     def get_local_ip(self):
         try:
-            # Create a dummy socket to find the preferred interface IP
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(("8.8.8.8", 80))
             ip = s.getsockname()[0]
@@ -161,6 +197,16 @@ class MobuBridgeGUI:
             return ip
         except Exception:
             return "127.0.0.1"
+
+    def refresh_ip(self):
+        self.local_ip = self.get_local_ip()
+        self.ip_display.configure(text=self.local_ip)
+        self.log(f">>> IP Refreshed: {self.local_ip}")
+
+    def copy_ip(self):
+        self.root.clipboard_clear()
+        self.root.clipboard_append(self.local_ip)
+        self.log(">>> IP copied to clipboard!")
 
     def toggle_bridge(self):
         if not self.is_running:
@@ -177,6 +223,7 @@ class MobuBridgeGUI:
             self.log("!!! Error: Port must be a number.")
             return
 
+        self.save_config()
         self.is_running = True
         self.btn_toggle.configure(text="STOP BRIDGE")
         self.packet_count = 0
@@ -217,7 +264,7 @@ class MobuBridgeGUI:
                                     self.root.after(0, lambda c=self.packet_count: self.log(f"Sent {c} packets..."))
                     except: pass
             except Exception as e:
-                self.root.after(0, lambda: self.log(f"!!! WS Error: {e}"))
+                self.root.after(0, lambda err=e: self.log(f"!!! WS Error: {err}"))
 
         async def start_ws():
             async with websockets.serve(handler, "0.0.0.0", self.ws_port):
@@ -227,7 +274,7 @@ class MobuBridgeGUI:
             self.loop.run_until_complete(start_ws())
         except Exception as e:
             if self.is_running:
-                self.root.after(0, lambda: self.log(f"!!! Loop Error: {e}"))
+                self.root.after(0, lambda err=e: self.log(f"!!! Loop Error: {err}"))
 
 if __name__ == "__main__":
     root = tk.Tk()

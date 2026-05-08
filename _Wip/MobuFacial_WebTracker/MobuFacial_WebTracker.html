@@ -232,7 +232,11 @@
         <div id="settings-bar">
             <div class="input-group">
                 <label>Bridge IP</label>
-                <input type="text" id="bridge-ip" placeholder="192.168.x.x" value="localhost">
+                <input type="text" id="bridge-ip" placeholder="192.168.x.x" value="localhost" style="width: 110px;">
+            </div>
+            <div class="input-group">
+                <label>Port</label>
+                <input type="text" id="bridge-port" placeholder="8080" value="8080" style="width: 60px;">
             </div>
             <button id="connectBtn">Connect Bridge</button>
         </div>
@@ -295,6 +299,7 @@
         const startBtn = document.getElementById('startBtn');
         const connectBtn = document.getElementById('connectBtn');
         const ipInput = document.getElementById('bridge-ip');
+        const portInput = document.getElementById('bridge-port');
 
         let faceLandmarker;
         let handLandmarker;
@@ -305,9 +310,11 @@
         let cameraStream = null;
         let displayMode = "features";
 
-        // Load saved IP
+        // Load saved settings
         const savedIp = localStorage.getItem('mobu_bridge_ip');
         if (savedIp) ipInput.value = savedIp;
+        const savedPort = localStorage.getItem('mobu_bridge_port');
+        if (savedPort) portInput.value = savedPort;
 
         function log(msg) {
             const div = document.createElement('div');
@@ -319,15 +326,18 @@
         // --- WebSocket Setup ---
         function connectBridge() {
             const ip = ipInput.value.trim() || 'localhost';
+            const port = portInput.value.trim() || '8080';
+            
             localStorage.setItem('mobu_bridge_ip', ip);
+            localStorage.setItem('mobu_bridge_port', port);
             
             if (ws) {
                 ws.close();
                 ws = null;
             }
 
-            log(`Connecting to ws://${ip}:8080...`);
-            ws = new WebSocket(`ws://${ip}:8080`);
+            log(`Connecting to ws://${ip}:${port}...`);
+            ws = new WebSocket(`ws://${ip}:${port}`);
             
             ws.onopen = () => {
                 document.getElementById('ws-status').className = 'status connected';
