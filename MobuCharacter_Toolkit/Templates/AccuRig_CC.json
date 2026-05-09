@@ -1,4 +1,6 @@
 {
+    "DisplayName": "AccuRig",
+    "Description": "Reallusion AccuRig standard naming.",
     "HipsLink": "CC_Base_Hip",
     "SpineLink": "CC_Base_Waist",
     "Spine1Link": "CC_Base_Spine01",

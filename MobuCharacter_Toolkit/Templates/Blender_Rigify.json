@@ -1,4 +1,6 @@
 {
+    "DisplayName": "Rigify (Blender)",
+    "Description": "Blender Rigify (DEF bones) naming convention.",
     "HipsLink": "DEF-spine",
     "SpineLink": "DEF-spine.001",
     "Spine1Link": "DEF-spine.002",

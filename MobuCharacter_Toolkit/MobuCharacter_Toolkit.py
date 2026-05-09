@@ -1,5 +1,5 @@
 """
-MobuSkeleton_Toolkit.py
+MobuCharacter_Toolkit.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Generate a standard T-Pose skeleton (VMC, HIK, or UE naming) and match 
 its proportions to any HIK character for precise retargeting.
@@ -109,9 +109,9 @@ UE_NAME = {
 VMC_NAME = {k: k for k in BONE_POS}
 
 # ── State ─────────────────────────────────────────────────────────────────────
-if not hasattr(sys, "mobu_skeleton_toolkit_state"):
-    sys.mobu_skeleton_toolkit_state = {"bones":{}, "root":None, "mode":"vmc", "ns":""}
-g_st  = sys.mobu_skeleton_toolkit_state
+if not hasattr(sys, "mobu_character_toolkit_state"):
+    sys.mobu_character_toolkit_state = {"bones":{}, "root":None, "mode":"vmc", "ns":"", "template_map":{}, "template_desc_map":{}}
+g_st  = sys.mobu_character_toolkit_state
 g_ui  = {}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -129,24 +129,33 @@ def get_ns():
     return raw
 
 def get_mode():
+    if "list_mode" not in g_ui: return g_st.get("mode", "Standard_HIK.json")
     idx = g_ui["list_mode"].ItemIndex
-    if idx == 0: return "hik"
-    if idx == 1: return "vmc"
-    return "ue"
+    if idx >= 0:
+        display_name = g_ui["list_mode"].Items[idx]
+        return g_st["template_map"].get(display_name, display_name + ".json")
+    return g_st.get("mode", "Standard_HIK.json")
 
-def bone_scene_name(vmc_key, mode, ns):
-    """Full scene name for a bone."""
-    if mode == "vmc":
-        return ns + "VMC_" + vmc_key
-    elif mode == "ue":
-        return ns + "UE_" + UE_NAME.get(vmc_key, vmc_key)
-    else:
-        return ns + HIK_STD[vmc_key]
+def get_template_path(file_name):
+    try: base_dir = os.path.dirname(__file__)
+    except: base_dir = r"C:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuCharacter_Toolkit"
+    return os.path.join(base_dir, "Templates", file_name)
 
-def root_scene_name(mode, ns):
-    if mode == "vmc": return ns + "VMC_Root"
-    if mode == "ue":  return ns + "UE_root"
-    return ns + HIK_ROOT
+def get_template_data(file_name):
+    t_path = get_template_path(file_name)
+    try:
+        with open(t_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except: return {}
+
+def get_bone_name_from_map(vmc_key, bmap):
+    hik_slot = HIK_LINK.get(vmc_key)
+    if hik_slot and hik_slot in bmap:
+        return bmap[hik_slot]
+    return vmc_key
+
+def root_scene_name(tmpl_name, ns):
+    return ns + tmpl_name.replace(".json", "") + "_Root"
 
 def get_characterized_chars():
     result = []
@@ -170,10 +179,8 @@ def get_link_model_map(char):
         except: pass
     return m
 
-def delete_hik_char_for(mode, ns):
-    if mode == "vmc":   char_name = ns + "VMC_HIK_Character"
-    elif mode == "ue":  char_name = ns + "UE_HIK_Character"
-    else:               char_name = ns + "HIK_Character"
+def delete_hik_char_for(tmpl_name, ns):
+    char_name = ns + tmpl_name.replace(".json", "") + "_Character"
     for char in list(FBSystem().Scene.Characters):
         n = getattr(char, "LongName", None) or char.Name
         if n == char_name:
@@ -194,7 +201,30 @@ def delete_bones_with_prefix(prefix):
 
 # ── Core logic ────────────────────────────────────────────────────────────────
 def do_generate():
-    mode = get_mode()
+    idx = g_ui["list_mode"].ItemIndex
+    if idx < 0:
+        FBMessageBox("Error", "Please select a target naming template.", "OK")
+        return
+        
+    display_name = g_ui["list_mode"].Items[idx]
+    file_name = g_st["template_map"].get(display_name, display_name + ".json")
+    
+    try:
+        base_dir = os.path.dirname(__file__)
+    except:
+        base_dir = r"C:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuCharacter_Toolkit"
+    t_path = os.path.join(base_dir, "Templates", file_name)
+    
+    try:
+        with open(t_path, 'r', encoding='utf-8') as f:
+            bmap = json.load(f)
+    except Exception as e:
+        FBMessageBox("Error", "Failed to load template for generation.", "OK")
+        return
+        
+    def get_bone_name_local(vmc_key):
+        return get_bone_name_from_map(vmc_key, bmap)
+
     ns   = get_ns()
 
     try:
@@ -202,12 +232,11 @@ def do_generate():
     except:
         scale = 1.0
 
-    root_name = root_scene_name(mode, ns)
+    root_name = root_scene_name(file_name, ns)
 
     # Auto-delete existing skeleton with same prefix to allow re-generation
-    prefix = ns + ("VMC_" if mode == "vmc" else HIK_STD["Hips"].replace("Hips",""))
-    # Delete root + all bones sharing the namespace
-    all_names = set([root_name] + [bone_scene_name(k, mode, ns) for k in BONE_POS])
+    prefix = ns
+    all_names = set([root_name] + [ns + get_bone_name_local(k) for k in BONE_POS])
     for comp in list(FBSystem().Scene.Components):
         try:
             if not isinstance(comp, FBModel): continue
@@ -216,7 +245,7 @@ def do_generate():
                 comp.FBDelete()
         except: pass
 
-    delete_hik_char_for(mode, ns)
+    delete_hik_char_for(file_name, ns)
     FBSystem().Scene.Evaluate()
 
     root = FBModelSkeleton(root_name)
@@ -226,7 +255,13 @@ def do_generate():
 
     models = {}
     for vmc_key in BONE_POS:
-        fname = bone_scene_name(vmc_key, mode, ns)
+        # Only generate bones that are defined in the JSON (except core ones if you want, but JSON defines all needed)
+        hik_slot = HIK_LINK.get(vmc_key)
+        if hik_slot not in bmap and vmc_key not in ["Hips", "Spine", "Head", "LeftUpperLeg", "RightUpperLeg", "LeftShoulder", "RightShoulder"]:
+            # Skip optional bones not in template (like UpperChest or Toes)
+            continue
+            
+        fname = ns + get_bone_name_local(vmc_key)
         m = FBModelSkeleton(fname)
         m.LongName = fname; m.Show = True; m.Visibility = True
         x, y, z = BONE_POS[vmc_key]
@@ -250,13 +285,11 @@ def do_generate():
 
     g_st["bones"] = models
     g_st["root"]  = root
-    g_st["mode"]  = mode
+    g_st["mode"]  = file_name
     g_st["ns"]    = ns
 
     # Auto-create HIK character definition (unlocked) so bones stay editable
-    if mode == "vmc":  char_name = ns + "VMC_HIK_Character"
-    elif mode == "ue": char_name = ns + "UE_HIK_Character"
-    else:              char_name = ns + "HIK_Character"
+    char_name = ns + file_name.replace(".json", "") + "_Character"
     char = None
     for c in FBSystem().Scene.Characters:
         n = getattr(c, "LongName", None) or c.Name
@@ -302,7 +335,7 @@ def do_generate():
     ok = char.SetCharacterizeOn(True)
     FBSystem().Scene.Evaluate()
 
-    label = "VMC" if mode == "vmc" else "HIK"
+    label = display_name
     h_val = g_ui["edit_height"].Text.strip() or "170"
     if ok:
         status("Generated & characterized {} skeleton ({}cm), ns='{}'. Use Match to adjust proportions.".format(label, h_val, ns))
@@ -355,21 +388,24 @@ def do_match():
     status("Matched {}/{} bones from '{}' and re-characterized.".format(matched, len(g_st["bones"]), char_name))
 
 def scan_bones_from_scene(mode, ns):
-    """Re-scan bone models from scene based on current mode and namespace."""
+    """Re-scan bone models from scene based on current mode (filename) and namespace."""
     bones = {}
     root  = None
     root_name = root_scene_name(mode, ns)
+    bmap = get_template_data(mode)
+    if not bmap: return None, {}
+    
+    # Pre-calculate all expected bone names
+    targets = {ns + get_bone_name_from_map(k, bmap): k for k in BONE_POS}
+    
     for comp in FBSystem().Scene.Components:
         try:
             if not isinstance(comp, FBModel): continue
             n = getattr(comp, "LongName", None) or comp.Name
             if n == root_name:
                 root = comp
-            else:
-                for vmc_key in BONE_POS:
-                    if n == bone_scene_name(vmc_key, mode, ns):
-                        bones[vmc_key] = comp
-                        break
+            elif n in targets:
+                bones[targets[n]] = comp
         except: pass
     return root, bones
 
@@ -457,12 +493,17 @@ def do_delete():
     mode = get_mode(); ns = get_ns()
     if not ns:
         FBMessageBox("Error", "Please enter a namespace to delete.", "OK"); return
+    
     delete_hik_char_for(mode, ns)
-    prefix = ns + ("VMC_" if mode == "vmc" else "")
     root_n = root_scene_name(mode, ns)
-
+    bmap = get_template_data(mode)
+    
     deleted = 0
-    targets = set([root_n] + [bone_scene_name(k, mode, ns) for k in BONE_POS])
+    targets = set([root_n])
+    if bmap:
+        for k in BONE_POS:
+            targets.add(ns + get_bone_name_from_map(k, bmap))
+
     for comp in list(FBSystem().Scene.Components):
         try:
             if not isinstance(comp, FBModel): continue
@@ -475,6 +516,72 @@ def do_delete():
     if deleted:
         g_st["bones"] = {}; g_st["root"] = None
     status("Deleted {} objects (ns='{}').".format(deleted, ns))
+
+def OnAutoDetectClick(control, event):
+    base_dir = os.path.dirname(__file__) if '__file__' in globals() else r"C:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuCharacter_Toolkit"
+    template_dir = os.path.join(base_dir, "Templates")
+    
+    if not os.path.exists(template_dir):
+        FBMessageBox("Error", "Templates directory not found.", "OK")
+        return
+        
+    templates = [f for f in os.listdir(template_dir) if f.endswith(".json")]
+    if not templates:
+        FBMessageBox("Error", "No templates found in directory.", "OK")
+        return
+        
+    def get_models(model, lst):
+        if model:
+            lst.append(model)
+            for child in model.Children:
+                get_models(child, lst)
+
+    all_models = []
+    get_models(FBSystem().Scene.RootModel, all_models)
+    
+    best_match_count = 0
+    best_template = None
+    
+    for tmpl in templates:
+        t_path = os.path.join(template_dir, tmpl)
+        try:
+            with open(t_path, 'r', encoding='utf-8') as f:
+                bmap = json.load(f)
+        except: continue
+            
+        matched = 0
+        for prop_name, expected_name in bmap.items():
+            exp = expected_name.strip().lower()
+            for comp in all_models:
+                if not isinstance(comp, FBModel): continue
+                n_long = (getattr(comp, "LongName", "") or comp.Name).strip().lower()
+                n_short = comp.Name.strip().lower()
+                
+                prefix = ""
+                if ":" in getattr(comp, "LongName", ""):
+                    prefix = getattr(comp, "LongName", "").rsplit(":", 1)[0].lower() + ":"
+                    
+                is_match = False
+                if n_short == exp: is_match = True
+                elif n_long == prefix + exp: is_match = True
+                elif n_long.endswith(":" + exp): is_match = True
+                elif n_long == exp: is_match = True
+                
+                if is_match:
+                    matched += 1
+                    break
+                    
+        if matched > best_match_count:
+            best_match_count = matched
+            best_template = t_path
+            
+    if best_match_count >= 10 and best_template:
+        t_name = os.path.basename(best_template).replace(".json", "")
+        FBMessageBox("Auto-Detect", "Detected skeleton format: {} ({} bones matched).\n\nClick OK to auto-characterize.".format(t_name, best_match_count), "OK")
+        do_quick_characterize(best_template)
+    else:
+        FBMessageBox("Auto-Detect Failed", "Could not confidently detect a known skeleton.\nMax bones matched: {}\nPlease use the manual selection.".format(best_match_count), "OK")
+
 
 def do_quick_characterize(template_path):
     if not os.path.exists(template_path):
@@ -525,25 +632,38 @@ def do_quick_characterize(template_path):
     get_all_models(FBSystem().Scene.RootModel, all_models)
     
     for comp in all_models:
-        n_long = getattr(comp, "LongName", "") or comp.Name
-        n_short = comp.Name
+        if not isinstance(comp, FBModel): continue
+        # Get names and clean them
+        n_long = (getattr(comp, "LongName", "") or comp.Name).strip()
+        n_short = comp.Name.strip()
         
-        if prefix and not n_long.startswith(prefix): 
-            pass 
-        
+        # Aggressive matching: Check case-insensitive and suffix matches
         for prop_name, expected_name in bmap.items():
-            if n_long == prefix + expected_name or n_short == expected_name or n_long.endswith(":" + expected_name) or n_long == expected_name:
-                
+            exp = expected_name.strip()
+            
+            # Match conditions (Case-insensitive)
+            is_match = False
+            if n_short.lower() == exp.lower(): is_match = True
+            elif n_long.lower() == (prefix + exp).lower(): is_match = True
+            elif n_long.lower().endswith(":" + exp.lower()): is_match = True
+            elif n_long.lower() == exp.lower(): is_match = True
+            
+            if is_match:
                 prop = char.PropertyList.Find(prop_name)
-                if not prop:
+                if prop is None:
+                    # Fallback search
                     base = prop_name.replace("Link", "")
                     for p in char.PropertyList:
-                        if p.Name.endswith("Link") and base in p.Name:
+                        if p.Name.endswith("Link") and base.lower() in p.Name.lower():
                             prop = p
                             break
                             
-                if prop:
-                    prop.removeAll()
+                if prop is not None:
+                    try:
+                        prop.removeAll()
+                    except:
+                        pass
+                    
                     try: prop.append(comp)
                     except:
                         try: prop.insert(comp)
@@ -576,12 +696,6 @@ def do_quick_characterize(template_path):
     else:
         err = char.GetCharacterizeError()
         status("{} characterization failed (Matched {} bones).".format(t_name, matched))
-        print("--- [Quick_Characterize Debug] ---")
-        print("Template:", t_name)
-        print("Target Prefix:", prefix)
-        print("Matched Bones:", matched)
-        print("Error:", err)
-        print("----------------------------------")
         FBMessageBox("Warning", "Characterization failed.\nMatched {} bones.\n\nError: {}\n\nCheck Python console for details.".format(matched, err), "OK")
 
 # ── Callbacks ─────────────────────────────────────────────────────────────────
@@ -601,40 +715,81 @@ def OnCharTemplateClick(c, e):
     if g_ui["list_templates"].Items:
         idx = g_ui["list_templates"].ItemIndex
         if idx >= 0:
-            tmpl_name = g_ui["list_templates"].Items[idx]
-            # Assumes the script is loaded from its directory
+            display_name = g_ui["list_templates"].Items[idx]
+            file_name = g_st["template_map"].get(display_name, display_name + ".json")
             try:
                 base_dir = os.path.dirname(__file__)
             except:
                 base_dir = os.path.dirname(os.path.abspath(sys.argv[0] if sys.argv[0] else "."))
-                
-            # If base_dir fails, we can fallback to searching the standard plugin paths, but since
-            # the user moves this folder, let's use a robust path resolution:
-            
-            # Alternative: Since this tool is in SaintMobu_Tools/MobuSkeleton_Toolkit
-            t_path = os.path.join(base_dir, "Templates", tmpl_name)
+            t_path = os.path.join(base_dir, "Templates", file_name)
             if not os.path.exists(t_path):
-                # Fallback if __file__ is weird (sometimes in mobu console)
-                t_path = os.path.join(r"C:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuSkeleton_Toolkit\Templates", tmpl_name)
+                t_path = os.path.join(r"C:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuCharacter_Toolkit\Templates", file_name)
                 
             do_quick_characterize(t_path)
+    else:
+        FBMessageBox("Error", "No template selected.", "OK")
 
 def refresh_templates():
-    g_ui["list_templates"].Items.removeAll()
+    if "list_templates" in g_ui: g_ui["list_templates"].Items.removeAll()
+    if "list_mode" in g_ui: g_ui["list_mode"].Items.removeAll()
+    g_st["template_map"] = {}
+    g_st["template_desc_map"] = {}
+
     try:
         base_dir = os.path.dirname(__file__)
     except:
-        base_dir = r"C:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuSkeleton_Toolkit"
+        base_dir = r"C:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuCharacter_Toolkit"
     t_dir = os.path.join(base_dir, "Templates")
     if not os.path.exists(t_dir):
-        t_dir = r"C:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuSkeleton_Toolkit\Templates"
+        t_dir = r"C:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuCharacter_Toolkit\Templates"
         
+    found = []
     if os.path.exists(t_dir):
         for f in os.listdir(t_dir):
             if f.endswith(".json"):
-                g_ui["list_templates"].Items.append(f)
-    if g_ui["list_templates"].Items:
+                t_path = os.path.join(t_dir, f)
+                d_name = f.replace(".json", "")
+                desc   = "No description available."
+                try:
+                    with open(t_path, 'r', encoding='utf-8') as jf:
+                        data = json.load(jf)
+                        if "DisplayName" in data: d_name = data["DisplayName"]
+                        if "Description" in data: desc   = data["Description"]
+                except: pass
+                found.append((d_name, f, desc))
+    
+    # Sort: Standard HIK first, then alphabetical
+    def sort_key(item):
+        name = item[0]
+        if "standard hik" in name.lower(): return (0, name)
+        return (1, name)
+    
+    found.sort(key=sort_key)
+    
+    for d, f, ds in found:
+        g_st["template_map"][d] = f
+        g_st["template_desc_map"][d] = ds
+        if "list_templates" in g_ui: g_ui["list_templates"].Items.append(d)
+        if "list_mode" in g_ui: g_ui["list_mode"].Items.append(d)
+                    
+    if "list_templates" in g_ui and g_ui["list_templates"].Items:
         g_ui["list_templates"].ItemIndex = 0
+    if "list_mode" in g_ui and g_ui["list_mode"].Items:
+        g_ui["list_mode"].ItemIndex = 0
+        
+    update_template_info()
+
+def update_template_info():
+    # Update description label based on current selection in either list
+    # (Checking both tabs just in case, but usually user is in one)
+    d_name = None
+    if "list_templates" in g_ui and g_ui["list_templates"].ItemIndex >= 0:
+        d_name = g_ui["list_templates"].Items[g_ui["list_templates"].ItemIndex]
+    elif "list_mode" in g_ui and g_ui["list_mode"].ItemIndex >= 0:
+        d_name = g_ui["list_mode"].Items[g_ui["list_mode"].ItemIndex]
+        
+    if d_name and "lbl_tmpl_desc" in g_ui:
+        g_ui["lbl_tmpl_desc"].Caption = g_st["template_desc_map"].get(d_name, "")
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 def PopulateTool(tool):
@@ -676,10 +831,8 @@ def PopulateTool(tool):
     lyt_mode = FBHBoxLayout()
     lbl_mode = FBLabel(); lbl_mode.Caption = "Skeleton:"
     g_ui["list_mode"] = FBList()
-    g_ui["list_mode"].Items.append("MotionBuilder (HIK)")
-    g_ui["list_mode"].Items.append("Humanoid (VMC)")
-    g_ui["list_mode"].Items.append("Mannequins (UE)")
-    g_ui["list_mode"].ItemIndex = 0
+    g_ui["list_mode"].OnChange.Add(lambda c,e: update_template_info())
+
     lyt_mode.Add(lbl_mode, 65)
     lyt_mode.Add(g_ui["list_mode"], 170)
     lay.Add(lyt_mode, 30)
@@ -718,25 +871,46 @@ def PopulateTool(tool):
     lay.Add(btn_match, 35)
     
     # ── AUTO CHARACTERIZE TAB ────────────────────────────────────────────────
-    lay_auto.Add(hdr("QUICK CHARACTERIZE"), 25)
+    lay_auto.Add(hdr("AUTO CHARACTERIZE"), 25)
     
+    lay_auto.Add(hdr("1. SMART DETECT"), 25)
     lbl_desc = FBLabel()
     lbl_desc.Caption = "Select ANY bone of the character first."
     lbl_desc.Justify = FBTextJustify.kFBTextJustifyCenter
     lay_auto.Add(lbl_desc, 25)
     
+    b_auto = FBButton()
+    b_auto.Caption = "Auto-Detect & Characterize"
+    b_auto.OnClick.Add(OnAutoDetectClick)
+    lay_auto.Add(b_auto, 35)
+
+    lay_auto.Add(hdr("2. MANUAL SELECT"), 25)
     lyt_tmpl = FBHBoxLayout()
     lbl_tmpl = FBLabel(); lbl_tmpl.Caption = "Template:"
     g_ui["list_templates"] = FBList()
+    g_ui["list_templates"].OnChange.Add(lambda c,e: update_template_info())
     lyt_tmpl.Add(lbl_tmpl, 65)
     lyt_tmpl.Add(g_ui["list_templates"], 170)
     lay_auto.Add(lyt_tmpl, 30)
     
-    btn_char_tmpl = FBButton(); btn_char_tmpl.Caption = "Characterize from Template"; btn_char_tmpl.OnClick.Add(OnCharTemplateClick)
-    lay_auto.Add(btn_char_tmpl, 40)
+    b_char = FBButton()
+    b_char.Caption = "Characterize (Manual)"
+    b_char.OnClick.Add(OnCharTemplateClick)
+    lay_auto.Add(b_char, 35)
     
     btn_ref_tmpl = FBButton(); btn_ref_tmpl.Caption = "Reload Templates"; btn_ref_tmpl.OnClick.Add(lambda c,e: refresh_templates())
     lay_auto.Add(btn_ref_tmpl, 30)
+
+    lay_auto.Add(hdr("INFO"), 25)
+    g_ui["lbl_tmpl_desc"] = FBLabel()
+    g_ui["lbl_tmpl_desc"].Caption = "---"
+    g_ui["lbl_tmpl_desc"].Justify = FBTextJustify.kFBTextJustifyCenter
+    lay_auto.Add(g_ui["lbl_tmpl_desc"], 50)
+
+    lbl_inst = FBLabel()
+    lbl_inst.Caption = "角色須保持 T-pose，朝向 +Z"
+    lbl_inst.Justify = FBTextJustify.kFBTextJustifyCenter
+    lay_auto.Add(lbl_inst, 25)
 
     refresh_templates()
 
@@ -744,18 +918,16 @@ def PopulateTool(tool):
     g_ui["lbl_status"] = FBLabel(); g_ui["lbl_status"].Caption = "Ready."
     lay.Add(g_ui["lbl_status"], 25)
     
-    lbl_status2 = FBLabel(); lbl_status2.Caption = "P.S. 姿態不會被強制歸零，純粹讀取 JSON 填入部位"
-    lbl_status2.Justify = FBTextJustify.kFBTextJustifyCenter
-    lay_auto.Add(lbl_status2, 25)
+
     
     OnRefreshClick(None, None)
 
 def CreateTool():
-    tool = FBCreateUniqueTool("MobuSkeleton_Toolkit")
+    tool = FBCreateUniqueTool("MobuCharacter_Toolkit")
     if tool:
         PopulateTool(tool)
         ShowTool(tool)
-        FBMessageBox("Welcome", "MobuSkeleton_Toolkit\n本工具由小聖腦絲與Antigravity協作完成\nhttps://www.facebook.com/hysaint3d.mocap", "OK")
+        FBMessageBox("Welcome", "MobuCharacter_Toolkit\n本工具由小聖腦絲與Antigravity協作完成\nhttps://www.facebook.com/hysaint3d.mocap", "OK")
     else:
         print("Error creating Skeleton Generator tool.")
 
