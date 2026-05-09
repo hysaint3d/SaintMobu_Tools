@@ -1,6 +1,7 @@
 {
     "DisplayName": "Standard HIK",
     "Description": "Standard MotionBuilder HIK skeleton naming.",
+    "ReferenceLink": "Reference",
     "HipsLink": "Hips",
     "SpineLink": "Spine",
     "Spine1Link": "Spine1",

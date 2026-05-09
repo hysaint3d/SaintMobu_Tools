@@ -1,6 +1,7 @@
 {
     "DisplayName": "UE Mannequin",
     "Description": "Unreal Engine 4/5 Mannequin standard skeleton.",
+    "ReferenceLink": "root",
     "HipsLink": "pelvis",
     "SpineLink": "spine_01",
     "Spine1Link": "spine_02",

@@ -1,6 +1,7 @@
 {
     "DisplayName": "Standard VMC",
     "Description": "Standard VMC (Virtual Motion Capture) protocol naming.",
+    "ReferenceLink": "Root",
     "HipsLink": "Hips",
     "SpineLink": "Spine",
     "Spine1Link": "Chest",

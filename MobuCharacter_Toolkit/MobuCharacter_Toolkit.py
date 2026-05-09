@@ -5,9 +5,10 @@ Generate a standard T-Pose skeleton (VMC, HIK, or UE naming) and match
 its proportions to any HIK character for precise retargeting.
 
 Workflow:
-  1. Set NameSpace, Mode (VMC/HIK/UE) & Height -> Generate Character
-  2. (Optional) Select source HIK character -> Match & Characterize
-  3. Use the generated skeleton for VMC streaming or retargeting
+  1. Generate Skeleton: Create a standard T-Pose skeleton (VMC, HIK, UE).
+  2. Auto Characterize: Use Smart Detect or manual templates to instantly characterize 
+     complex external rigs (Biped, AdvancedSkeleton, MetaHuman, AutoRigPro, MMD, etc.).
+  3. Smart Matching: Utilizes Fuzzy and Aggressive matching for messy naming conventions.
 
 由小聖腦絲與 Antigravity 協作完成
 https://www.facebook.com/hysaint3d.mocap
@@ -561,11 +562,30 @@ def OnAutoDetectClick(control, event):
                 if ":" in getattr(comp, "LongName", ""):
                     prefix = getattr(comp, "LongName", "").rsplit(":", 1)[0].lower() + ":"
                     
+                # Helper for normalized matching (ignore space/underscore/dot)
+                use_fuzzy = g_ui["chk_fuzzy"].State == 1
+                use_aggressive = g_ui["chk_aggressive"].State == 1
+                
+                def norm(s): 
+                    s = s.lower()
+                    if use_fuzzy or use_aggressive: return s.replace(" ", "_").replace(".", "_")
+                    return s
+                
+                n_short_norm = norm(n_short)
+                exp_norm = norm(exp)
+                prefix_norm = norm(prefix) if prefix else ""
+                
                 is_match = False
-                if n_short == exp: is_match = True
-                elif n_long == prefix + exp: is_match = True
-                elif n_long.endswith(":" + exp): is_match = True
-                elif n_long == exp: is_match = True
+                if n_short_norm == exp_norm: is_match = True
+                elif norm(n_long) == prefix_norm + exp_norm: is_match = True
+                elif norm(n_long).endswith(":" + exp_norm): is_match = True
+                elif norm(n_long) == exp_norm: is_match = True
+                # Aggressive Match (Contains)
+                elif use_aggressive and exp_norm in n_short_norm: is_match = True
+                # Fuzzy Biped Match (Support Bip02, Bip001, etc.)
+                elif exp_norm.replace(" ", "_").replace(".", "_").startswith("bip01") and n_short_norm.replace(" ", "_").replace(".", "_").startswith("bip"):
+                    suffix = exp_norm[5:] # Part after "bip01"
+                    if n_short_norm.endswith(suffix): is_match = True
                 
                 if is_match:
                     matched += 1
@@ -631,22 +651,52 @@ def do_quick_characterize(template_path):
     all_models = []
     get_all_models(FBSystem().Scene.RootModel, all_models)
     
+    # Biped prefix detection (e.g. Bip01, Bip02, Bip001)
+    bip_prefix = ""
+    if selected.Name.lower().startswith("bip"):
+        parts = selected.Name.split(" ")
+        if parts: bip_prefix = parts[0]
+    
     for comp in all_models:
         if not isinstance(comp, FBModel): continue
         # Get names and clean them
         n_long = (getattr(comp, "LongName", "") or comp.Name).strip()
         n_short = comp.Name.strip()
         
-        # Aggressive matching: Check case-insensitive and suffix matches
         for prop_name, expected_name in bmap.items():
             exp = expected_name.strip()
             
-            # Match conditions (Case-insensitive)
+            # Helper for normalized matching (ignore space/underscore/dot)
+            use_fuzzy = g_ui["chk_fuzzy"].State == 1
+            use_aggressive = g_ui["chk_aggressive"].State == 1
+            
+            def norm(s): 
+                s = s.lower()
+                if use_fuzzy or use_aggressive: return s.replace(" ", "_").replace(".", "_")
+                return s
+            
+            n_short_norm = norm(n_short)
+            exp_norm = norm(exp)
+            prefix_norm = norm(prefix) if prefix else ""
+            
+            # Auto-swap Biped prefix if detected
+            exp_norm_bip = exp_norm.replace(" ", "_").replace(".", "_")
+            if bip_prefix and exp_norm_bip.startswith("bip01"):
+                bip_prefix_norm = norm(bip_prefix)
+                if exp_norm_bip == "bip01": exp_norm = bip_prefix_norm
+                else:
+                    exp_norm = exp_norm.replace("bip01 ", bip_prefix + " ")
+                    exp_norm = exp_norm.replace("bip01_", bip_prefix + "_")
+                    exp_norm = exp_norm.replace("bip01.", bip_prefix + ".")
+                    exp_norm = exp_norm.replace("bip01", bip_prefix)
+
+            # Match conditions (Respect Fuzzy setting)
             is_match = False
-            if n_short.lower() == exp.lower(): is_match = True
-            elif n_long.lower() == (prefix + exp).lower(): is_match = True
-            elif n_long.lower().endswith(":" + exp.lower()): is_match = True
-            elif n_long.lower() == exp.lower(): is_match = True
+            if n_short_norm == exp_norm: is_match = True
+            elif norm(n_long) == prefix_norm + exp_norm: is_match = True
+            elif norm(n_long).endswith(":" + exp_norm): is_match = True
+            elif norm(n_long) == exp_norm: is_match = True
+            elif use_aggressive and exp_norm in n_short_norm: is_match = True
             
             if is_match:
                 prop = char.PropertyList.Find(prop_name)
@@ -674,17 +724,17 @@ def do_quick_characterize(template_path):
                     root_model = comp.Parent
                 break
                 
-    if root_model:
-        ref_prop = char.PropertyList.Find("ReferenceLink")
-        if ref_prop is None:
-            for p in char.PropertyList:
-                if "Reference" in p.Name: ref_prop = p; break
-        if ref_prop is not None:
-            ref_prop.removeAll()
-            try: ref_prop.append(root_model)
-            except:
-                try: ref_prop.insert(root_model)
-                except: pass
+    # Auto-assign Reference node if not already set by JSON template
+    ref_prop = char.PropertyList.Find("ReferenceLink")
+    if ref_prop is None:
+        for p in char.PropertyList:
+            if "Reference" in p.Name: ref_prop = p; break
+            
+    if ref_prop and len(ref_prop) == 0 and root_model:
+        try: ref_prop.append(root_model)
+        except:
+            try: ref_prop.insert(root_model)
+            except: pass
                 
     FBSystem().Scene.Evaluate()
     ok = char.SetCharacterizeOn(True)
@@ -789,11 +839,11 @@ def update_template_info():
         d_name = g_ui["list_mode"].Items[g_ui["list_mode"].ItemIndex]
         
     if d_name and "lbl_tmpl_desc" in g_ui:
-        g_ui["lbl_tmpl_desc"].Caption = g_st["template_desc_map"].get(d_name, "")
+        g_ui["lbl_tmpl_desc"].Text = g_st["template_desc_map"].get(d_name, "")
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 def PopulateTool(tool):
-    tool.StartSizeX = 250
+    tool.StartSizeX = 280
     tool.StartSizeY = 460
 
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft,   "")
@@ -863,17 +913,15 @@ def PopulateTool(tool):
     lyt_src = FBHBoxLayout()
     g_ui["list_source"] = FBList()
     btn_ref = FBButton(); btn_ref.Caption = "Refresh"; btn_ref.OnClick.Add(OnRefreshClick)
-    lyt_src.Add(g_ui["list_source"], 160)
-    lyt_src.Add(btn_ref, 65)
+    lyt_src.Add(g_ui["list_source"], 190)
+    lyt_src.Add(btn_ref, 75)
     lay.Add(lyt_src, 25)
 
     btn_match = FBButton(); btn_match.Caption = "Match & Characterize"; btn_match.OnClick.Add(OnMatchClick)
     lay.Add(btn_match, 35)
     
     # ── AUTO CHARACTERIZE TAB ────────────────────────────────────────────────
-    lay_auto.Add(hdr("AUTO CHARACTERIZE"), 25)
-    
-    lay_auto.Add(hdr("1. SMART DETECT"), 25)
+    lay_auto.Add(hdr("SMART DETECT"), 25)
     lbl_desc = FBLabel()
     lbl_desc.Caption = "Select ANY bone of the character first."
     lbl_desc.Justify = FBTextJustify.kFBTextJustifyCenter
@@ -883,14 +931,26 @@ def PopulateTool(tool):
     b_auto.Caption = "Auto-Detect & Characterize"
     b_auto.OnClick.Add(OnAutoDetectClick)
     lay_auto.Add(b_auto, 35)
+    
+    g_ui["chk_fuzzy"] = FBButton()
+    g_ui["chk_fuzzy"].Style = FBButtonStyle.kFBCheckbox
+    g_ui["chk_fuzzy"].Caption = "Fuzzy Match (Ignore Space/Underscore/Dot)"
+    g_ui["chk_fuzzy"].State = 1
+    lay_auto.Add(g_ui["chk_fuzzy"], 25)
+    
+    g_ui["chk_aggressive"] = FBButton()
+    g_ui["chk_aggressive"].Style = FBButtonStyle.kFBCheckbox
+    g_ui["chk_aggressive"].Caption = "Aggressive Match (Contains Keyword)"
+    g_ui["chk_aggressive"].State = 0
+    lay_auto.Add(g_ui["chk_aggressive"], 25)
 
-    lay_auto.Add(hdr("2. MANUAL SELECT"), 25)
+    lay_auto.Add(hdr("MANUAL SELECT"), 25)
     lyt_tmpl = FBHBoxLayout()
     lbl_tmpl = FBLabel(); lbl_tmpl.Caption = "Template:"
     g_ui["list_templates"] = FBList()
     g_ui["list_templates"].OnChange.Add(lambda c,e: update_template_info())
     lyt_tmpl.Add(lbl_tmpl, 65)
-    lyt_tmpl.Add(g_ui["list_templates"], 170)
+    lyt_tmpl.Add(g_ui["list_templates"], 200)
     lay_auto.Add(lyt_tmpl, 30)
     
     b_char = FBButton()
@@ -902,10 +962,12 @@ def PopulateTool(tool):
     lay_auto.Add(btn_ref_tmpl, 30)
 
     lay_auto.Add(hdr("INFO"), 25)
-    g_ui["lbl_tmpl_desc"] = FBLabel()
-    g_ui["lbl_tmpl_desc"].Caption = "---"
+    g_ui["lbl_tmpl_desc"] = FBEdit()
+    g_ui["lbl_tmpl_desc"].Text = "---"
+    g_ui["lbl_tmpl_desc"].ReadOnly = True
+    g_ui["lbl_tmpl_desc"].MultiLine = True
     g_ui["lbl_tmpl_desc"].Justify = FBTextJustify.kFBTextJustifyCenter
-    lay_auto.Add(g_ui["lbl_tmpl_desc"], 50)
+    lay_auto.Add(g_ui["lbl_tmpl_desc"], 60)
 
     lbl_inst = FBLabel()
     lbl_inst.Caption = "角色須保持 T-pose，朝向 +Z"
@@ -923,7 +985,7 @@ def PopulateTool(tool):
     OnRefreshClick(None, None)
 
 def CreateTool():
-    tool = FBCreateUniqueTool("MobuCharacter_Toolkit")
+    tool = FBCreateUniqueTool("Saint's MobuCharacter_Toolkit")
     if tool:
         PopulateTool(tool)
         ShowTool(tool)

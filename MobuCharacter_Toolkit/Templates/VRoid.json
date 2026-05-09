@@ -1,6 +1,7 @@
 {
     "DisplayName": "VRoid",
     "Description": "VRoid Studio (vrm) character bone naming.",
+    "ReferenceLink": "Root",
     "HipsLink": "J_Bip_C_Hips",
     "SpineLink": "J_Bip_C_Spine",
     "Spine1Link": "J_Bip_C_Chest",
