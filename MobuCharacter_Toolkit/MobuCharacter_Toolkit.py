@@ -6,9 +6,10 @@ its proportions to any HIK character for precise retargeting.
 
 Workflow:
   1. Generate Skeleton: Create a standard T-Pose skeleton (VMC, HIK, UE).
-  2. Auto Characterize: Use Smart Detect or manual templates to instantly characterize 
-     complex external rigs (Biped, AdvancedSkeleton, MetaHuman, AutoRigPro, MMD, etc.).
-  3. Smart Matching: Utilizes Fuzzy and Aggressive matching for messy naming conventions.
+  2. Auto Characterize: Use Smart Detect or manual templates to instantly characterize rigs.
+  3. Skeleton Standardization: Use the "Tools" section to rename existing bones to 
+     standard naming conventions based on HIK character definitions.
+  4. Smart Matching: Supports Fuzzy/Aggressive matching for messy naming.
 
 由小聖腦絲與 Antigravity 協作完成
 https://www.facebook.com/hysaint3d.mocap
@@ -19,6 +20,16 @@ from pyfbsdk_additions import *
 import sys
 import os
 import json
+
+def get_script_dir():
+    """ Robustly get the script directory, handling MoBu's __file__ issues. """
+    if "__file__" in globals():
+        return os.path.dirname(__file__)
+    # Fallback for MoBu Python Editor
+    return r"C:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuCharacter_Toolkit"
+
+def get_template_dir():
+    return os.path.join(get_script_dir(), "Templates")
 
 # ── Bone tables ───────────────────────────────────────────────────────────────
 BASE_H = 170.0
@@ -138,8 +149,7 @@ def get_mode():
     return g_st.get("mode", "Standard_HIK.json")
 
 def get_template_path(file_name):
-    try: base_dir = os.path.dirname(__file__)
-    except: base_dir = r"C:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuCharacter_Toolkit"
+    base_dir = get_script_dir()
     return os.path.join(base_dir, "Templates", file_name)
 
 def get_template_data(file_name):
@@ -210,11 +220,7 @@ def do_generate():
     display_name = g_ui["list_mode"].Items[idx]
     file_name = g_st["template_map"].get(display_name, display_name + ".json")
     
-    try:
-        base_dir = os.path.dirname(__file__)
-    except:
-        base_dir = r"C:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuCharacter_Toolkit"
-    t_path = os.path.join(base_dir, "Templates", file_name)
+    t_path = get_template_path(file_name)
     
     try:
         with open(t_path, 'r', encoding='utf-8') as f:
@@ -519,8 +525,7 @@ def do_delete():
     status("Deleted {} objects (ns='{}').".format(deleted, ns))
 
 def OnAutoDetectClick(control, event):
-    base_dir = os.path.dirname(__file__) if '__file__' in globals() else r"C:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuCharacter_Toolkit"
-    template_dir = os.path.join(base_dir, "Templates")
+    template_dir = get_template_dir()
     
     if not os.path.exists(template_dir):
         FBMessageBox("Error", "Templates directory not found.", "OK")
@@ -628,6 +633,7 @@ def do_quick_characterize(template_path):
     if ":" in target_name: prefix = target_name.rsplit(":", 1)[0] + ":"
     
     # Use JSON filename as char suffix
+    template_dir = get_template_dir()
     t_name = os.path.basename(template_path).replace(".json", "")
     char_name = prefix + t_name + "_HIK_Character" if prefix else t_name + "_HIK_Character"
     
@@ -748,6 +754,70 @@ def do_quick_characterize(template_path):
         status("{} characterization failed (Matched {} bones).".format(t_name, matched))
         FBMessageBox("Warning", "Characterization failed.\nMatched {} bones.\n\nError: {}\n\nCheck Python console for details.".format(matched, err), "OK")
 
+def do_quick_rename(selected, template_path):
+    try:
+        with open(template_path, 'r', encoding='utf-8') as f:
+            bmap = json.load(f)
+    except Exception as e:
+        FBMessageBox("Error", "Failed to parse JSON template:\n" + str(e), "OK")
+        return
+
+    # Find the character this bone belongs to
+    char = None
+    # If the user selected a character in the scene, use it. Otherwise find by connection.
+    if isinstance(selected, FBCharacter):
+        char = selected
+    else:
+        # Check if any character is using this model
+        for c in FBSystem().Scene.Characters:
+            for i in range(len(c.PropertyList)):
+                prop = c.PropertyList[i]
+                if prop.Name.endswith("Link") and len(prop) > 0:
+                    if prop[0] == selected:
+                        char = c
+                        break
+            if char: break
+            
+    if not char:
+        FBMessageBox("Rename Error", "Could not find a characterized HIK character associated with the selection.\nPlease characterize the rig first, or select a bone that is already part of a Character.", "OK")
+        return
+
+    # Biped prefix detection (to preserve Bip01/Bip02 etc)
+    bip_prefix = ""
+    hips_bone = None
+    hips_prop = char.PropertyList.Find("HipsLink")
+    if hips_prop and len(hips_prop) > 0:
+        hips_bone = hips_prop[0]
+        if hips_bone.Name.lower().startswith("bip"):
+            parts = hips_bone.Name.split(" ")
+            if parts: bip_prefix = parts[0]
+
+    matched = 0
+    renamed_count = 0
+    
+    # Iterate through template slots and rename connected bones
+    for prop_name, expected_name in bmap.items():
+        if prop_name in ["DisplayName", "Description"]: continue
+        
+        prop = char.PropertyList.Find(prop_name)
+        if prop and len(prop) > 0:
+            bone = prop[0]
+            
+            # Determine standard name from template
+            new_name = expected_name.strip()
+            # Special handling for Biped prefix preservation
+            if bip_prefix and new_name.lower().startswith("bip01"):
+                new_name = new_name.replace("Bip01", bip_prefix)
+            
+            if bone.Name != new_name:
+                bone.Name = new_name
+                renamed_count += 1
+            matched += 1
+
+    status("Standardized {} bones for character '{}'.".format(renamed_count, char.Name))
+    FBMessageBox("Success", "Standardized Renaming Complete!\nCharacter: {}\nBones renamed: {}".format(char.Name, renamed_count), "OK")
+
+
 # ── Callbacks ─────────────────────────────────────────────────────────────────
 def OnRefreshClick(c, e):
     g_ui["list_source"].Items.removeAll()
@@ -767,13 +837,10 @@ def OnCharTemplateClick(c, e):
         if idx >= 0:
             display_name = g_ui["list_templates"].Items[idx]
             file_name = g_st["template_map"].get(display_name, display_name + ".json")
-            try:
-                base_dir = os.path.dirname(__file__)
-            except:
-                base_dir = os.path.dirname(os.path.abspath(sys.argv[0] if sys.argv[0] else "."))
-            t_path = os.path.join(base_dir, "Templates", file_name)
+            t_path = os.path.join(get_template_dir(), file_name)
             if not os.path.exists(t_path):
-                t_path = os.path.join(r"C:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuCharacter_Toolkit\Templates", file_name)
+                FBMessageBox("Error", "Template not found: " + t_path, "OK")
+                return
                 
             do_quick_characterize(t_path)
     else:
@@ -785,13 +852,10 @@ def refresh_templates():
     g_st["template_map"] = {}
     g_st["template_desc_map"] = {}
 
-    try:
-        base_dir = os.path.dirname(__file__)
-    except:
-        base_dir = r"C:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuCharacter_Toolkit"
-    t_dir = os.path.join(base_dir, "Templates")
+    t_dir = get_template_dir()
     if not os.path.exists(t_dir):
-        t_dir = r"C:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuCharacter_Toolkit\Templates"
+        status("Templates directory not found: " + t_dir)
+        return
         
     found = []
     if os.path.exists(t_dir):
@@ -829,6 +893,31 @@ def refresh_templates():
         
     update_template_info()
 
+def OnRenameClick(control, event):
+    models = FBModelList()
+    FBGetSelectedModels(models)
+    if not models:
+        FBMessageBox("Error", "Please select any bone of the character first.", "OK")
+        return
+        
+    idx = g_ui["list_templates"].ItemIndex
+    if idx < 0:
+        FBMessageBox("Error", "Please select a template first.", "OK")
+        return
+        
+    display_name = g_ui["list_templates"].Items[idx]
+    # Use template_map to get the actual filename
+    file_name = g_st["template_map"].get(display_name, display_name + ".json")
+    
+    template_dir = get_template_dir()
+    t_path = os.path.join(template_dir, file_name)
+    
+    if not os.path.exists(t_path):
+        FBMessageBox("Error", "Template file not found:\n" + t_path, "OK")
+        return
+        
+    do_quick_rename(models[0], t_path)
+
 def update_template_info():
     # Update description label based on current selection in either list
     # (Checking both tabs just in case, but usually user is in one)
@@ -844,7 +933,7 @@ def update_template_info():
 # ── UI ────────────────────────────────────────────────────────────────────────
 def PopulateTool(tool):
     tool.StartSizeX = 280
-    tool.StartSizeY = 460
+    tool.StartSizeY = 580
 
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft,   "")
     y = FBAddRegionParam(0, FBAttachType.kFBAttachTop,    "")
@@ -958,6 +1047,13 @@ def PopulateTool(tool):
     b_char.OnClick.Add(OnCharTemplateClick)
     lay_auto.Add(b_char, 35)
     
+    lay_auto.Add(hdr("TOOLS"), 25)
+    b_rename = FBButton()
+    b_rename.Caption = "Rename Skeleton (Fuzzy)"
+    b_rename.OnClick.Add(OnRenameClick)
+    lay_auto.Add(b_rename, 35)
+    
+    lay_auto.Add(FBLabel(), 10) # Spacer
     btn_ref_tmpl = FBButton(); btn_ref_tmpl.Caption = "Reload Templates"; btn_ref_tmpl.OnClick.Add(lambda c,e: refresh_templates())
     lay_auto.Add(btn_ref_tmpl, 30)
 
