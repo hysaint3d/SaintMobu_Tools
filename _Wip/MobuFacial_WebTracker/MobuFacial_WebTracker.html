@@ -381,8 +381,8 @@
                 <span style="font-size: 0.7rem; color: #666; text-transform: uppercase;">Display Points</span>
                 <div style="display: flex; gap: 5px;">
                     <button class="mode-btn active" data-mode="all">All</button>
-                    <button class="mode-btn" data-mode="1/2">1/2</button>
-                    <button class="mode-btn" data-mode="1/4">1/4</button>
+                    <button class="mode-btn" data-mode="main_features">Main Feat.</button>
+                    <button class="mode-btn" data-mode="eyes_mouth">Eye/Mouth</button>
                 </div>
             </div>
         </div>
@@ -659,15 +659,45 @@
                                     allLandmarks.forEach(lm => {
                                         ctx.beginPath(); ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 1, 0, 2 * Math.PI); ctx.fill();
                                     });
-                                } else if (displayMode === "1/2") {
+                                } else if (displayMode === "main_features") {
+                                    // Indices for Lips, Eyes, Nose, and Face Contour
+                                    const mainFeatureIndices = new Set([
+                                        // Lips
+                                        61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185,
+                                        78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191,
+                                        // Left Eye
+                                        33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246,
+                                        // Right Eye
+                                        362, 398, 384, 385, 386, 387, 388, 466, 263, 249, 390, 373, 374, 380, 381, 382,
+                                        // Irises
+                                        468, 469, 470, 471, 472, 473, 474, 475, 476, 477,
+                                        // Nose
+                                        1, 2, 98, 327, 168, 197, 5, 4, 19, 94, 6, 195, 45, 275, 220, 440, 274, 245, 126, 355, 64, 294,
+                                        // Face Contour
+                                        10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109
+                                    ]);
+                                    
                                     allLandmarks.forEach((lm, i) => {
-                                        if (i % 2 === 0) {
+                                        if (mainFeatureIndices.has(i)) {
                                             ctx.beginPath(); ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 1.5, 0, 2 * Math.PI); ctx.fill();
                                         }
                                     });
-                                } else if (displayMode === "1/4") {
+                                } else if (displayMode === "eyes_mouth") {
+                                    // Indices for Lips and Eyes
+                                    const eyeMouthIndices = new Set([
+                                        // Lips
+                                        61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185,
+                                        78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191,
+                                        // Left Eye
+                                        33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246,
+                                        // Right Eye
+                                        362, 398, 384, 385, 386, 387, 388, 466, 263, 249, 390, 373, 374, 380, 381, 382,
+                                        // Irises (approximate centers and surrounding)
+                                        468, 469, 470, 471, 472, 473, 474, 475, 476, 477
+                                    ]);
+                                    
                                     allLandmarks.forEach((lm, i) => {
-                                        if (i % 4 === 0) {
+                                        if (eyeMouthIndices.has(i)) {
                                             ctx.beginPath(); ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 2, 0, 2 * Math.PI); ctx.fill();
                                         }
                                     });
@@ -721,6 +751,7 @@
                                         args: [boneName, tx, ty, tz, 0, 0, 0, 1]
                                     });
                                 });
+                            });
                         }
                     } catch (e) { console.error("Hand Error:", e); }
                 }
