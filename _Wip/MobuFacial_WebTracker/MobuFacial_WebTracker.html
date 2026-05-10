@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Saint's Mobu FacialTracker V 1.1 (Mobile Device Support)</title>
+    <title>Saint's Mobu FacialTracker V 1.1.1 (Mobile Device Support)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -344,7 +344,7 @@
 <body>
 
     <div id="header">
-        <h1>Saint's Mobu FacialTracker <span style="font-size: 0.6em; color: #888;">v1.1</span></h1>
+        <h1>Saint's Mobu FacialTracker <span style="font-size: 0.6em; color: #888;">v1.1.1</span></h1>
         <div class="status-container">
             <span id="ws-status" class="status disconnected">Bridge: Off</span>
             <span id="mp-status" class="status disconnected">AI: Loading</span>
@@ -373,16 +373,16 @@
             <button id="startBtn">Start Capture</button>
             
             <div style="display: flex; flex-direction: column; justify-content: center; border-left: 1px solid #333; padding-left: 15px;">
-                <label style="font-size: 0.9rem; cursor: pointer;"><input type="checkbox" id="trackFace" checked> Face</label>
-                <label style="font-size: 0.9rem; cursor: pointer;"><input type="checkbox" id="trackHands"> Hands</label>
+                <label style="font-size: 0.9rem; cursor: pointer;"><input type="checkbox" id="trackFace" checked> Face(BS)</label>
+                <label style="font-size: 0.9rem; cursor: pointer;"><input type="checkbox" id="trackHands"> Hand(PosData)</label>
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 8px; border-left: 1px solid #333; padding-left: 15px;">
                 <span style="font-size: 0.7rem; color: #666; text-transform: uppercase;">Display Points</span>
                 <div style="display: flex; gap: 5px;">
-                    <button class="mode-btn" data-mode="all">All</button>
-                    <button class="mode-btn active" data-mode="features">Face</button>
-                    <button class="mode-btn" data-mode="hands">Hands</button>
+                    <button class="mode-btn active" data-mode="all">All</button>
+                    <button class="mode-btn" data-mode="1/2">1/2</button>
+                    <button class="mode-btn" data-mode="1/4">1/4</button>
                 </div>
             </div>
         </div>
@@ -493,64 +493,6 @@
         });
 
         // --- Math Utilities ---
-        const vec3 = {
-            sub: (a, b) => ({x: a.x - b.x, y: a.y - b.y, z: a.z - b.z}),
-            add: (a, b) => ({x: a.x + b.x, y: a.y + b.y, z: a.z + b.z}),
-            cross: (a, b) => ({
-                x: a.y * b.z - a.z * b.y,
-                y: a.z * b.x - a.x * b.z,
-                z: a.x * b.y - a.y * b.x
-            }),
-            normalize: (v) => {
-                const len = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
-                return len > 0 ? {x: v.x/len, y: v.y/len, z: v.z/len} : {x:0, y:0, z:0};
-            }
-        };
-
-        function lookRotation(forward, up) {
-            let f = vec3.normalize(forward);
-            let r = vec3.normalize(vec3.cross(up, f));
-            let u = vec3.cross(f, r);
-            
-            let m00 = r.x, m01 = r.y, m02 = r.z;
-            let m10 = u.x, m11 = u.y, m12 = u.z;
-            let m20 = f.x, m21 = f.y, m22 = f.z;
-            
-            let num8 = (m00 + m11) + m22;
-            let q = {x:0, y:0, z:0, w:1};
-            
-            if (num8 > 0) {
-                let num = Math.sqrt(num8 + 1.0);
-                q.w = num * 0.5;
-                num = 0.5 / num;
-                q.x = (m12 - m21) * num;
-                q.y = (m20 - m02) * num;
-                q.z = (m01 - m10) * num;
-            } else if ((m00 >= m11) && (m00 >= m22)) {
-                let num7 = Math.sqrt(((1.0 + m00) - m11) - m22);
-                let num4 = 0.5 / num7;
-                q.x = 0.5 * num7;
-                q.y = (m01 + m10) * num4;
-                q.z = (m02 + m20) * num4;
-                q.w = (m12 - m21) * num4;
-            } else if (m11 > m22) {
-                let num6 = Math.sqrt(((1.0 + m11) - m00) - m22);
-                let num3 = 0.5 / num6;
-                q.x = (m10 + m01) * num3;
-                q.y = 0.5 * num6;
-                q.z = (m21 + m12) * num3;
-                q.w = (m20 - m02) * num3;
-            } else {
-                let num5 = Math.sqrt(((1.0 + m22) - m00) - m11);
-                let num2 = 0.5 / num5;
-                q.x = (m20 + m02) * num2;
-                q.y = (m21 + m12) * num2;
-                q.z = 0.5 * num5;
-                q.w = (m01 - m10) * num2;
-            }
-            return q;
-        }
-
         function matrixToQuaternion(m) {
             const trace = m[0] + m[5] + m[10];
             let q = { x: 0, y: 0, z: 0, w: 1 };
@@ -689,17 +631,9 @@
                     args: ["Root", 0, 0, 0, 0, 0, 0, 1]
                 });
 
+                // Keep Head only for Facial anchor, remove full body Fake Skeleton
                 const vmcSkeleton = {
-                    "Hips": [0, 0.90, 0], "Spine": [0, 0.10, 0], "Chest": [0, 0.15, 0],
-                    "UpperChest": [0, 0.15, 0], "Neck": [0, 0.10, 0], "Head": [0, 0.10, 0],
-                    "LeftShoulder": [0.05, 0.10, 0], "LeftUpperArm": [0.10, 0, 0],
-                    "LeftLowerArm": [0.25, 0, 0], "LeftHand": [0.25, 0, 0],
-                    "RightShoulder": [-0.05, 0.10, 0], "RightUpperArm": [-0.10, 0, 0],
-                    "RightLowerArm": [-0.25, 0, 0], "RightHand": [-0.25, 0, 0],
-                    "LeftUpperLeg": [0.10, -0.05, 0], "LeftLowerLeg": [0, -0.40, 0],
-                    "LeftFoot": [0, -0.40, 0], "LeftToes": [0, -0.05, 0.15],
-                    "RightUpperLeg": [-0.10, -0.05, 0], "RightLowerLeg": [0, -0.40, 0],
-                    "RightFoot": [0, -0.40, 0], "RightToes": [0, -0.05, 0.15]
+                    "Head": [0, 1.6, 0]
                 };
 
                 let headRot = { x: 0, y: 0, z: 0, w: 1 };
@@ -725,11 +659,17 @@
                                     allLandmarks.forEach(lm => {
                                         ctx.beginPath(); ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 1, 0, 2 * Math.PI); ctx.fill();
                                     });
-                                } else if (displayMode === "features") {
-                                    const featureIndices = [33, 133, 362, 263, 61, 291, 13, 14]; // Eyes & Lips
-                                    featureIndices.forEach(idx => {
-                                        const lm = allLandmarks[idx];
-                                        if (lm) { ctx.beginPath(); ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 2, 0, 2 * Math.PI); ctx.fill(); }
+                                } else if (displayMode === "1/2") {
+                                    allLandmarks.forEach((lm, i) => {
+                                        if (i % 2 === 0) {
+                                            ctx.beginPath(); ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 1.5, 0, 2 * Math.PI); ctx.fill();
+                                        }
+                                    });
+                                } else if (displayMode === "1/4") {
+                                    allLandmarks.forEach((lm, i) => {
+                                        if (i % 4 === 0) {
+                                            ctx.beginPath(); ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 2, 0, 2 * Math.PI); ctx.fill();
+                                        }
                                     });
                                 }
                             }
@@ -751,131 +691,36 @@
 
                         if (handResults.landmarks && handResults.landmarks.length > 0) {
                             
-                            const FINGER_MAP = {
-                                Thumb: [1, 2, 3, 4],
-                                Index: [5, 6, 7, 8],
-                                Middle: [9, 10, 11, 12],
-                                Ring: [13, 14, 15, 16],
-                                Pinky: [17, 18, 19, 20]
-                            };
-                            
-                            const BONE_NAMES = {
-                                Left: {
-                                    Wrist: "LeftHand",
-                                    Thumb: ["LeftThumbProximal", "LeftThumbIntermediate", "LeftThumbDistal"],
-                                    Index: ["LeftIndexProximal", "LeftIndexIntermediate", "LeftIndexDistal"],
-                                    Middle: ["LeftMiddleProximal", "LeftMiddleIntermediate", "LeftMiddleDistal"],
-                                    Ring: ["LeftRingProximal", "LeftRingIntermediate", "LeftRingDistal"],
-                                    Pinky: ["LeftLittleProximal", "LeftLittleIntermediate", "LeftLittleDistal"]
-                                },
-                                Right: {
-                                    Wrist: "RightHand",
-                                    Thumb: ["RightThumbProximal", "RightThumbIntermediate", "RightThumbDistal"],
-                                    Index: ["RightIndexProximal", "RightIndexIntermediate", "RightIndexDistal"],
-                                    Middle: ["RightMiddleProximal", "RightMiddleIntermediate", "RightMiddleDistal"],
-                                    Ring: ["RightRingProximal", "RightRingIntermediate", "RightRingDistal"],
-                                    Pinky: ["RightLittleProximal", "RightLittleIntermediate", "RightLittleDistal"]
-                                }
-                            };
-
                             handResults.landmarks.forEach((landmarks, index) => {
                                 // MediaPipe detects physical handedness from the unmirrored video stream
                                 const mpHandedness = handResults.handednesses[index][0].categoryName;
                                 const side = mpHandedness; 
                                 
-                                if (displayMode === "all" || displayMode === "hands") {
-                                    ctx.fillStyle = side === "Left" ? "#00aaff" : "#ffaa00";
-                                    landmarks.forEach(lm => {
-                                        ctx.beginPath(); ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 3, 0, 2 * Math.PI); ctx.fill();
+                                // Always show hand points if tracking is on
+                                ctx.fillStyle = side === "Left" ? "#00aaff" : "#ffaa00";
+                                landmarks.forEach(lm => {
+                                    ctx.beginPath(); ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 3, 0, 2 * Math.PI); ctx.fill();
+                                });
+                                
+                                // Send 21 Raw Tracker Points to MoBu
+                                // Send 21 Raw Tracker Points to MoBu
+                                landmarks.forEach((lm, i) => {
+                                    // Map to 3D Space (Width 1.5m, Height 1.5m, Center at 1.2m height)
+                                    let tx = (0.5 - lm.x) * 1.5;
+                                    let ty = (0.5 - lm.y) * 1.5 + 1.2;
+                                    let tz = -lm.z * 1.5; // Depth scaling
+
+                                    // Use a sorted name prefix for better management in MoBu Scene Browser
+                                    const prefix = side === "Left" ? "L_Hand_" : "R_Hand_";
+                                    const paddedIdx = i.toString().padStart(2, '0');
+                                    const boneName = `${prefix}${paddedIdx}`;
+
+                                    packets.push({
+                                        addr: "/VMC/Ext/Bone/Pos",
+                                        types: "sfffffff",
+                                        args: [boneName, tx, ty, tz, 0, 0, 0, 1]
                                     });
-                                }
-                                
-                                // Transform MediaPipe coordinates to Physical VMC Space
-                                // Unity Space: X right, Y up, Z forward
-                                // MediaPipe Space: X right, Y down, Z relative depth (closer is negative)
-                                const physicalLandmarks = landmarks.map(lm => ({
-                                    x: lm.x,
-                                    y: -lm.y,
-                                    z: lm.z
-                                }));
-
-                                // Calculate Quaternions using Physical Landmarks
-                                let wrist = physicalLandmarks[0];
-                                let indexMcp = physicalLandmarks[5];
-                                let pinkyMcp = physicalLandmarks[17];
-
-                                // Palm Normal (Up Vector)
-                                let palmForward = vec3.sub(indexMcp, wrist);
-                                let palmSide = vec3.sub(pinkyMcp, wrist);
-                                // Since we flipped X, the handedness cross product needs to be consistent
-                                let palmUp = side === "Left" ? vec3.cross(palmSide, palmForward) : vec3.cross(palmForward, palmSide);
-
-                                let wristRot = lookRotation(palmForward, palmUp);
-                                
-                                packets.push({
-                                    addr: "/VMC/Ext/Bone/Pos",
-                                    types: "sfffffff",
-                                    args: [BONE_NAMES[side].Wrist, 0, 0, 0, wristRot.x, wristRot.y, wristRot.z, wristRot.w]
                                 });
-
-                                // Virtual Tracker sent as a BONE so MoBu auto-generates it
-                                let rawWrist = landmarks[0];
-                                let tx = (0.5 - rawWrist.x) * 1.5;          // Width scale 1.5m
-                                let ty = (0.5 - rawWrist.y) * 1.5 + 1.2;    // Height scale 1.5m, Center at 1.2m
-                                let tz = -rawWrist.z * 2.0;                 // Depth scaling
-
-                                packets.push({
-                                    addr: "/VMC/Ext/Bone/Pos",
-                                    types: "sfffffff",
-                                    args: [`${side}HandTracker`, tx, ty, tz, wristRot.x, wristRot.y, wristRot.z, wristRot.w]
-                                });
-
-                                // Virtual Finger Bone Lengths (to prevent collapsing in MoBu)
-                                const signX = side === "Left" ? 1 : -1;
-                                const SPREAD = {
-                                    Thumb: [0.03 * signX, -0.02, 0.03],
-                                    Index: [0.08 * signX, 0, 0.03],
-                                    Middle: [0.08 * signX, 0, 0],
-                                    Ring: [0.08 * signX, 0, -0.03],
-                                    Pinky: [0.07 * signX, 0, -0.05]
-                                };
-                                const LENGTHS = {
-                                    Thumb: [0.03 * signX, 0.02 * signX],
-                                    Index: [0.04 * signX, 0.03 * signX],
-                                    Middle: [0.05 * signX, 0.03 * signX],
-                                    Ring: [0.04 * signX, 0.03 * signX],
-                                    Pinky: [0.03 * signX, 0.02 * signX]
-                                };
-
-                                // Finger Joints
-                                for (let finger in FINGER_MAP) {
-                                    let indices = FINGER_MAP[finger];
-                                    let boneNames = BONE_NAMES[side][finger];
-                                    
-                                    for (let i = 0; i < 3; i++) {
-                                        let currentIdx = indices[i];
-                                        let childIdx = indices[i + 1];
-                                        
-                                        let forward = vec3.sub(physicalLandmarks[childIdx], physicalLandmarks[currentIdx]);
-                                        // Use palmUp as generic UP for finger joints to prevent twist
-                                        let q = lookRotation(forward, palmUp);
-                                        
-                                        // Assign virtual local position based on finger hierarchy
-                                        let px = 0, py = 0, pz = 0;
-                                        if (i === 0) { // Proximal (attached to wrist)
-                                            px = SPREAD[finger][0]; py = SPREAD[finger][1]; pz = SPREAD[finger][2];
-                                        } else { // Intermediate / Distal
-                                            px = LENGTHS[finger][i - 1]; py = 0; pz = 0;
-                                        }
-                                        
-                                        packets.push({
-                                            addr: "/VMC/Ext/Bone/Pos",
-                                            types: "sfffffff",
-                                            args: [boneNames[i], px, py, pz, q.x, q.y, q.z, q.w]
-                                        });
-                                    }
-                                }
-                            });
                         }
                     } catch (e) { console.error("Hand Error:", e); }
                 }
