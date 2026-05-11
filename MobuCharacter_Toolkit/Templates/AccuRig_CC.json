@@ -12,297 +12,334 @@
     "HipsLink": {
         "Name": "CC_Base_Hip",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            8.687,
+            0.16,
+            0.716
+        ],
+        "RotationOrder": 0
     },
     "SpineLink": {
         "Name": "CC_Base_Waist",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            2.449,
+            0.021,
+            0.061
+        ],
+        "RotationOrder": 0
     },
     "Spine1Link": {
         "Name": "CC_Base_Spine01",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -17.369,
+            -0.006,
+            0.001
+        ],
+        "RotationOrder": 0
     },
     "Spine2Link": {
         "Name": "CC_Base_Spine02",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            0.0,
+            -0.0,
+            -0.0
+        ],
+        "RotationOrder": 0
     },
     "NeckLink": {
         "Name": "CC_Base_NeckTwist01",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            32.559,
+            -0.032,
+            -0.657
+        ],
+        "RotationOrder": 0
     },
     "HeadLink": {
         "Name": "CC_Base_Head",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -28.984,
+            0.259,
+            0.067
+        ],
+        "RotationOrder": 0
     },
     "LeftShoulderLink": {
         "Name": "CC_Base_L_Clavicle",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -13.185,
+            3.744,
+            -90.999
+        ],
+        "RotationOrder": 0
     },
     "LeftArmLink": {
         "Name": "CC_Base_L_Upperarm",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            13.218,
+            0.08,
+            0.46
+        ],
+        "RotationOrder": 0
     },
     "LeftForeArmLink": {
         "Name": "CC_Base_L_Forearm",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -0.015,
+            -0.206,
+            -0.046
+        ],
+        "RotationOrder": 0
     },
     "LeftHandLink": {
         "Name": "CC_Base_L_Hand",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            7.905,
+            13.074,
+            0.979
+        ],
+        "RotationOrder": 0
     },
     "RightShoulderLink": {
         "Name": "CC_Base_R_Clavicle",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -13.588,
+            -3.738,
+            89.747
+        ],
+        "RotationOrder": 0
     },
     "RightArmLink": {
         "Name": "CC_Base_R_Upperarm",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            13.506,
+            -0.078,
+            -0.461
+        ],
+        "RotationOrder": 0
     },
     "RightForeArmLink": {
         "Name": "CC_Base_R_Forearm",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            0.006,
+            0.201,
+            0.04
+        ],
+        "RotationOrder": 0
     },
     "RightHandLink": {
         "Name": "CC_Base_R_Hand",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            7.739,
+            -10.078,
+            0.285
+        ],
+        "RotationOrder": 0
     },
     "LeftUpLegLink": {
         "Name": "CC_Base_L_Thigh",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -168.246,
+            -0.058,
+            -178.135
+        ],
+        "RotationOrder": 0
     },
     "LeftLegLink": {
         "Name": "CC_Base_L_Calf",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -4.865,
+            0.407,
+            1.306
+        ],
+        "RotationOrder": 0
     },
     "LeftFootLink": {
         "Name": "CC_Base_L_Foot",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            61.899,
+            0.47,
+            1.611
+        ],
+        "RotationOrder": 0
     },
     "LeftToeBaseLink": {
         "Name": "CC_Base_L_ToeBase",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            41.336,
+            -62.89,
+            -48.808
+        ],
+        "RotationOrder": 0
     },
     "RightUpLegLink": {
         "Name": "CC_Base_R_Thigh",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -166.754,
+            -0.027,
+            178.298
+        ],
+        "RotationOrder": 0
     },
     "RightLegLink": {
         "Name": "CC_Base_R_Calf",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -10.067,
+            -0.655,
+            -0.853
+        ],
+        "RotationOrder": 0
     },
     "RightFootLink": {
         "Name": "CC_Base_R_Foot",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            65.509,
+            6.968,
+            -1.175
+        ],
+        "RotationOrder": 0
     },
     "RightToeBaseLink": {
         "Name": "CC_Base_R_ToeBase",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            41.339,
+            62.896,
+            48.815
+        ],
+        "RotationOrder": 0
     },
     "LeftHandThumb1Link": {
         "Name": "CC_Base_L_Thumb1",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            41.667,
+            -24.345,
+            -9.818
+        ],
+        "RotationOrder": 0
     },
     "LeftHandThumb2Link": {
         "Name": "CC_Base_L_Thumb2",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -19.023,
+            0.802,
+            5.645
+        ],
+        "RotationOrder": 0
     },
     "LeftHandThumb3Link": {
         "Name": "CC_Base_L_Thumb3",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -5.801,
+            -5.043,
+            3.144
+        ],
+        "RotationOrder": 0
     },
     "LeftHandIndex1Link": {
         "Name": "CC_Base_L_Index1",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -7.383,
+            -13.654,
+            -0.152
+        ],
+        "RotationOrder": 0
     },
     "LeftHandIndex2Link": {
         "Name": "CC_Base_L_Index2",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            0.022,
+            0.596,
+            -0.085
+        ],
+        "RotationOrder": 0
     },
     "LeftHandIndex3Link": {
         "Name": "CC_Base_L_Index3",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -7.147,
+            -11.142,
+            6.42
+        ],
+        "RotationOrder": 0
     },
     "LeftHandMiddle1Link": {
         "Name": "CC_Base_L_Mid1",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -7.64,
+            -13.591,
+            -0.206
+        ],
+        "RotationOrder": 0
     },
     "LeftHandMiddle2Link": {
         "Name": "CC_Base_L_Mid2",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -0.003,
+            0.401,
+            -0.017
+        ],
+        "RotationOrder": 0
     },
     "LeftHandMiddle3Link": {
         "Name": "CC_Base_L_Mid3",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            9.085,
+            11.449,
+            -4.403
+        ],
+        "RotationOrder": 0
     },
     "LeftHandRing1Link": {
         "Name": "CC_Base_L_Ring1",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -8.414,
+            -13.188,
+            -0.081
+        ],
+        "RotationOrder": 0
     },
     "LeftHandRing2Link": {
         "Name": "CC_Base_L_Ring2",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -0.628,
+            -0.016,
+            -0.065
+        ],
+        "RotationOrder": 0
     },
     "LeftHandRing3Link": {
         "Name": "CC_Base_L_Ring3",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            5.687,
+            7.204,
+            -10.392
+        ],
+        "RotationOrder": 0
     },
     "LeftHandPinky1Link": {
         "Name": "CC_Base_L_Pinky1",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -7.991,
+            -13.217,
+            -0.173
+        ],
+        "RotationOrder": 0
     },
     "LeftHandPinky2Link": {
         "Name": "CC_Base_L_Pinky2",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -1.056,
+            -0.166,
+            0.048
+        ],
+        "RotationOrder": 0
     },
     "LeftHandPinky3Link": {
         "Name": "CC_Base_L_Pinky3",
         "Rotation": [
-            0,
-            0,
-            0
-        ]
+            -6.908,
+            -7.929,
+            -9.691
+        ],
+        "RotationOrder": 0
     }
 }
