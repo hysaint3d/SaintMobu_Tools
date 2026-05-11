@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 MobuCharacter_Toolkit.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -26,7 +27,7 @@ def get_script_dir():
     if "__file__" in globals():
         return os.path.dirname(__file__)
     # Fallback for MoBu Python Editor
-    return r"C:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuCharacter_Toolkit"
+    return r"C:\Users\hysaint\OneDrive\桌面\Antigravity\SaintMobu_Tools\MobuCharacter_Toolkit"
 
 def get_template_dir():
     return os.path.join(get_script_dir(), "Templates")
@@ -162,7 +163,9 @@ def get_template_data(file_name):
 def get_bone_name_from_map(vmc_key, bmap):
     hik_slot = HIK_LINK.get(vmc_key)
     if hik_slot and hik_slot in bmap:
-        return bmap[hik_slot]
+        val = bmap[hik_slot]
+        if isinstance(val, dict): return val.get("Name", vmc_key)
+        return val
     return vmc_key
 
 def root_scene_name(tmpl_name, ns):
@@ -280,8 +283,16 @@ def do_generate():
         if vmc_key not in models: continue
         models[vmc_key].Parent = root if parent_key is None else models.get(parent_key, root)
 
-    for m in models.values():
-        m.SetVector(FBVector3d(0,0,0), FBModelTransformationType.kModelRotation, False)
+    use_custom_axis = g_ui.get("chk_use_custom_axis") and g_ui["chk_use_custom_axis"].State == 1
+    for vmc_key, m in models.items():
+        rot = [0, 0, 0]
+        if use_custom_axis:
+            hik_slot = HIK_LINK.get(vmc_key)
+            if hik_slot and hik_slot in bmap:
+                val = bmap[hik_slot]
+                if isinstance(val, dict) and "Rotation" in val:
+                    rot = val["Rotation"]
+        m.SetVector(FBVector3d(rot[0], rot[1], rot[2]), FBModelTransformationType.kModelRotation, False)
 
     # Hide parent link on Hips to avoid ugly line from Root through the crotch
     if "Hips" in models:
@@ -464,9 +475,17 @@ def do_characterize():
             try:    prop.append(bones["Chest"])
             except: prop.insert(bones["Chest"])
 
-    # Force T-Pose rotations to zero
-    for m in bones.values():
-        m.SetVector(FBVector3d(0,0,0), FBModelTransformationType.kModelRotation, False)
+    # Force T-Pose rotations
+    use_custom_axis = g_ui.get("chk_use_custom_axis") and g_ui["chk_use_custom_axis"].State == 1
+    for vmc_key, m in bones.items():
+        rot = [0, 0, 0]
+        if use_custom_axis:
+            hik_slot = HIK_LINK.get(vmc_key)
+            if hik_slot and hik_slot in bmap:
+                val = bmap[hik_slot]
+                if isinstance(val, dict) and "Rotation" in val:
+                    rot = val["Rotation"]
+        m.SetVector(FBVector3d(rot[0], rot[1], rot[2]), FBModelTransformationType.kModelRotation, False)
     if root:
         root.SetVector(FBVector3d(0,0,0), FBModelTransformationType.kModelRotation, False)
 
@@ -557,6 +576,8 @@ def OnAutoDetectClick(control, event):
             
         matched = 0
         for prop_name, expected_name in bmap.items():
+            if isinstance(expected_name, dict): expected_name = expected_name.get("Name", "")
+            if not expected_name: continue
             exp = expected_name.strip().lower()
             for comp in all_models:
                 if not isinstance(comp, FBModel): continue
@@ -670,6 +691,8 @@ def do_quick_characterize(template_path):
         n_short = comp.Name.strip()
         
         for prop_name, expected_name in bmap.items():
+            if isinstance(expected_name, dict): expected_name = expected_name.get("Name", "")
+            if not expected_name: continue
             exp = expected_name.strip()
             
             # Helper for normalized matching (ignore space/underscore/dot)
@@ -797,6 +820,8 @@ def do_quick_rename(selected, template_path):
     
     # Iterate through template slots and rename connected bones
     for prop_name, expected_name in bmap.items():
+        if isinstance(expected_name, dict): expected_name = expected_name.get("Name", "")
+        if not expected_name: continue
         if prop_name in ["DisplayName", "Description"]: continue
         
         prop = char.PropertyList.Find(prop_name)
@@ -989,6 +1014,12 @@ def PopulateTool(tool):
     lyt_h.Add(lbl_h, 75)
     lyt_h.Add(g_ui["edit_height"], 70)
     lay.Add(lyt_h, 30)
+    
+    g_ui["chk_use_custom_axis"] = FBButton()
+    g_ui["chk_use_custom_axis"].Style = FBButtonStyle.kFBCheckbox
+    g_ui["chk_use_custom_axis"].Caption = "Use Template Axis (Custom)"
+    g_ui["chk_use_custom_axis"].State = 0
+    lay.Add(g_ui["chk_use_custom_axis"], 25)
 
     btn_gen = FBButton(); btn_gen.Caption = "Generate Character"; btn_gen.OnClick.Add(OnGenerateClick)
     lay.Add(btn_gen, 35)
