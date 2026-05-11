@@ -1,57 +1,428 @@
 {
     "DisplayName": "Blender Auto-Rig Pro",
     "Description": "Blender Auto-Rig Pro (ARP) exported naming (root, hips, upper_arm_L, etc.)",
-    "ReferenceLink": "root",
-    "HipsLink": "hips",
-    "SpineLink": "spine",
-    "Spine1Link": "chest",
-    "Spine2Link": "chest_01",
-    "NeckLink": "neck",
-    "HeadLink": "head",
-    "LeftShoulderLink": "shoulder_L",
-    "LeftArmLink": "upper_arm_L",
-    "LeftForeArmLink": "lower_arm_L",
-    "LeftHandLink": "hand_L",
-    "RightShoulderLink": "shoulder_R",
-    "RightArmLink": "upper_arm_R",
-    "RightForeArmLink": "lower_arm_R",
-    "RightHandLink": "hand_R",
-    "LeftUpLegLink": "upper_leg_L",
-    "LeftLegLink": "lower_leg_L",
-    "LeftFootLink": "foot_L",
-    "LeftToeBaseLink": "toes_L",
-    "RightUpLegLink": "upper_leg_R",
-    "RightLegLink": "lower_leg_R",
-    "RightFootLink": "foot_R",
-    "RightToeBaseLink": "toes_R",
-    "LeftHandThumb1Link": "thumb_proximal_L",
-    "LeftHandThumb2Link": "thumb_intermediate_L",
-    "LeftHandThumb3Link": "thumb_distal_L",
-    "LeftHandIndex1Link": "index_proximal_L",
-    "LeftHandIndex2Link": "index_intermediate_L",
-    "LeftHandIndex3Link": "index_distal_L",
-    "LeftHandMiddle1Link": "middle_proximal_L",
-    "LeftHandMiddle2Link": "middle_intermediate_L",
-    "LeftHandMiddle3Link": "middle_distal_L",
-    "LeftHandRing1Link": "ring_proximal_L",
-    "LeftHandRing2Link": "ring_intermediate_L",
-    "LeftHandRing3Link": "ring_distal_L",
-    "LeftHandPinky1Link": "little_proximal_L",
-    "LeftHandPinky2Link": "little_intermediate_L",
-    "LeftHandPinky3Link": "little_distal_L",
-    "RightHandThumb1Link": "thumb_proximal_R",
-    "RightHandThumb2Link": "thumb_intermediate_R",
-    "RightHandThumb3Link": "thumb_distal_R",
-    "RightHandIndex1Link": "index_proximal_R",
-    "RightHandIndex2Link": "index_intermediate_R",
-    "RightHandIndex3Link": "index_distal_R",
-    "RightHandMiddle1Link": "middle_proximal_R",
-    "RightHandMiddle2Link": "middle_intermediate_R",
-    "RightHandMiddle3Link": "middle_distal_R",
-    "RightHandRing1Link": "ring_proximal_R",
-    "RightHandRing2Link": "ring_intermediate_R",
-    "RightHandRing3Link": "ring_distal_R",
-    "RightHandPinky1Link": "little_proximal_R",
-    "RightHandPinky2Link": "little_intermediate_R",
-    "RightHandPinky3Link": "little_distal_R"
+    "ReferenceLink": {
+        "Name": "root",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "HipsLink": {
+        "Name": "hips",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "SpineLink": {
+        "Name": "spine",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "Spine1Link": {
+        "Name": "chest",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "Spine2Link": {
+        "Name": "chest_01",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "NeckLink": {
+        "Name": "neck",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "HeadLink": {
+        "Name": "head",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftShoulderLink": {
+        "Name": "shoulder_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftArmLink": {
+        "Name": "upper_arm_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftForeArmLink": {
+        "Name": "lower_arm_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandLink": {
+        "Name": "hand_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightShoulderLink": {
+        "Name": "shoulder_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightArmLink": {
+        "Name": "upper_arm_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightForeArmLink": {
+        "Name": "lower_arm_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandLink": {
+        "Name": "hand_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftUpLegLink": {
+        "Name": "upper_leg_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftLegLink": {
+        "Name": "lower_leg_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftFootLink": {
+        "Name": "foot_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftToeBaseLink": {
+        "Name": "toes_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightUpLegLink": {
+        "Name": "upper_leg_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightLegLink": {
+        "Name": "lower_leg_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightFootLink": {
+        "Name": "foot_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightToeBaseLink": {
+        "Name": "toes_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandThumb1Link": {
+        "Name": "thumb_proximal_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandThumb2Link": {
+        "Name": "thumb_intermediate_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandThumb3Link": {
+        "Name": "thumb_distal_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandIndex1Link": {
+        "Name": "index_proximal_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandIndex2Link": {
+        "Name": "index_intermediate_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandIndex3Link": {
+        "Name": "index_distal_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandMiddle1Link": {
+        "Name": "middle_proximal_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandMiddle2Link": {
+        "Name": "middle_intermediate_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandMiddle3Link": {
+        "Name": "middle_distal_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandRing1Link": {
+        "Name": "ring_proximal_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandRing2Link": {
+        "Name": "ring_intermediate_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandRing3Link": {
+        "Name": "ring_distal_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandPinky1Link": {
+        "Name": "little_proximal_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandPinky2Link": {
+        "Name": "little_intermediate_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandPinky3Link": {
+        "Name": "little_distal_L",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandThumb1Link": {
+        "Name": "thumb_proximal_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandThumb2Link": {
+        "Name": "thumb_intermediate_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandThumb3Link": {
+        "Name": "thumb_distal_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandIndex1Link": {
+        "Name": "index_proximal_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandIndex2Link": {
+        "Name": "index_intermediate_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandIndex3Link": {
+        "Name": "index_distal_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandMiddle1Link": {
+        "Name": "middle_proximal_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandMiddle2Link": {
+        "Name": "middle_intermediate_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandMiddle3Link": {
+        "Name": "middle_distal_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandRing1Link": {
+        "Name": "ring_proximal_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandRing2Link": {
+        "Name": "ring_intermediate_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandRing3Link": {
+        "Name": "ring_distal_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandPinky1Link": {
+        "Name": "little_proximal_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandPinky2Link": {
+        "Name": "little_intermediate_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandPinky3Link": {
+        "Name": "little_distal_R",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    }
 }

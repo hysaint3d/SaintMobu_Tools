@@ -1,57 +1,428 @@
 {
     "DisplayName": "VRoid",
     "Description": "VRoid Studio (vrm) character bone naming.",
-    "ReferenceLink": "Root",
-    "HipsLink": "J_Bip_C_Hips",
-    "SpineLink": "J_Bip_C_Spine",
-    "Spine1Link": "J_Bip_C_Chest",
-    "Spine2Link": "J_Bip_C_UpperChest",
-    "NeckLink": "J_Bip_C_Neck",
-    "HeadLink": "J_Bip_C_Head",
-    "LeftShoulderLink": "J_Bip_L_Shoulder",
-    "LeftArmLink": "J_Bip_L_UpperArm",
-    "LeftForeArmLink": "J_Bip_L_LowerArm",
-    "LeftHandLink": "J_Bip_L_Hand",
-    "RightShoulderLink": "J_Bip_R_Shoulder",
-    "RightArmLink": "J_Bip_R_UpperArm",
-    "RightForeArmLink": "J_Bip_R_LowerArm",
-    "RightHandLink": "J_Bip_R_Hand",
-    "LeftUpLegLink": "J_Bip_L_UpperLeg",
-    "LeftLegLink": "J_Bip_L_LowerLeg",
-    "LeftFootLink": "J_Bip_L_Foot",
-    "LeftToeBaseLink": "J_Bip_L_ToeBase",
-    "RightUpLegLink": "J_Bip_R_UpperLeg",
-    "RightLegLink": "J_Bip_R_LowerLeg",
-    "RightFootLink": "J_Bip_R_Foot",
-    "RightToeBaseLink": "J_Bip_R_ToeBase",
-    "LeftHandThumb1Link": "J_Bip_L_Thumb1",
-    "LeftHandThumb2Link": "J_Bip_L_Thumb2",
-    "LeftHandThumb3Link": "J_Bip_L_Thumb3",
-    "LeftHandIndex1Link": "J_Bip_L_Index1",
-    "LeftHandIndex2Link": "J_Bip_L_Index2",
-    "LeftHandIndex3Link": "J_Bip_L_Index3",
-    "LeftHandMiddle1Link": "J_Bip_L_Middle1",
-    "LeftHandMiddle2Link": "J_Bip_L_Middle2",
-    "LeftHandMiddle3Link": "J_Bip_L_Middle3",
-    "LeftHandRing1Link": "J_Bip_L_Ring1",
-    "LeftHandRing2Link": "J_Bip_L_Ring2",
-    "LeftHandRing3Link": "J_Bip_L_Ring3",
-    "LeftHandPinky1Link": "J_Bip_L_Little1",
-    "LeftHandPinky2Link": "J_Bip_L_Little2",
-    "LeftHandPinky3Link": "J_Bip_L_Little3",
-    "RightHandThumb1Link": "J_Bip_R_Thumb1",
-    "RightHandThumb2Link": "J_Bip_R_Thumb2",
-    "RightHandThumb3Link": "J_Bip_R_Thumb3",
-    "RightHandIndex1Link": "J_Bip_R_Index1",
-    "RightHandIndex2Link": "J_Bip_R_Index2",
-    "RightHandIndex3Link": "J_Bip_R_Index3",
-    "RightHandMiddle1Link": "J_Bip_R_Middle1",
-    "RightHandMiddle2Link": "J_Bip_R_Middle2",
-    "RightHandMiddle3Link": "J_Bip_R_Middle3",
-    "RightHandRing1Link": "J_Bip_R_Ring1",
-    "RightHandRing2Link": "J_Bip_R_Ring2",
-    "RightHandRing3Link": "J_Bip_R_Ring3",
-    "RightHandPinky1Link": "J_Bip_R_Little1",
-    "RightHandPinky2Link": "J_Bip_R_Little2",
-    "RightHandPinky3Link": "J_Bip_R_Little3"
+    "ReferenceLink": {
+        "Name": "Root",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "HipsLink": {
+        "Name": "J_Bip_C_Hips",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "SpineLink": {
+        "Name": "J_Bip_C_Spine",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "Spine1Link": {
+        "Name": "J_Bip_C_Chest",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "Spine2Link": {
+        "Name": "J_Bip_C_UpperChest",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "NeckLink": {
+        "Name": "J_Bip_C_Neck",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "HeadLink": {
+        "Name": "J_Bip_C_Head",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftShoulderLink": {
+        "Name": "J_Bip_L_Shoulder",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftArmLink": {
+        "Name": "J_Bip_L_UpperArm",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftForeArmLink": {
+        "Name": "J_Bip_L_LowerArm",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandLink": {
+        "Name": "J_Bip_L_Hand",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightShoulderLink": {
+        "Name": "J_Bip_R_Shoulder",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightArmLink": {
+        "Name": "J_Bip_R_UpperArm",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightForeArmLink": {
+        "Name": "J_Bip_R_LowerArm",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandLink": {
+        "Name": "J_Bip_R_Hand",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftUpLegLink": {
+        "Name": "J_Bip_L_UpperLeg",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftLegLink": {
+        "Name": "J_Bip_L_LowerLeg",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftFootLink": {
+        "Name": "J_Bip_L_Foot",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftToeBaseLink": {
+        "Name": "J_Bip_L_ToeBase",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightUpLegLink": {
+        "Name": "J_Bip_R_UpperLeg",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightLegLink": {
+        "Name": "J_Bip_R_LowerLeg",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightFootLink": {
+        "Name": "J_Bip_R_Foot",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightToeBaseLink": {
+        "Name": "J_Bip_R_ToeBase",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandThumb1Link": {
+        "Name": "J_Bip_L_Thumb1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandThumb2Link": {
+        "Name": "J_Bip_L_Thumb2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandThumb3Link": {
+        "Name": "J_Bip_L_Thumb3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandIndex1Link": {
+        "Name": "J_Bip_L_Index1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandIndex2Link": {
+        "Name": "J_Bip_L_Index2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandIndex3Link": {
+        "Name": "J_Bip_L_Index3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandMiddle1Link": {
+        "Name": "J_Bip_L_Middle1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandMiddle2Link": {
+        "Name": "J_Bip_L_Middle2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandMiddle3Link": {
+        "Name": "J_Bip_L_Middle3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandRing1Link": {
+        "Name": "J_Bip_L_Ring1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandRing2Link": {
+        "Name": "J_Bip_L_Ring2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandRing3Link": {
+        "Name": "J_Bip_L_Ring3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandPinky1Link": {
+        "Name": "J_Bip_L_Little1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandPinky2Link": {
+        "Name": "J_Bip_L_Little2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandPinky3Link": {
+        "Name": "J_Bip_L_Little3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandThumb1Link": {
+        "Name": "J_Bip_R_Thumb1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandThumb2Link": {
+        "Name": "J_Bip_R_Thumb2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandThumb3Link": {
+        "Name": "J_Bip_R_Thumb3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandIndex1Link": {
+        "Name": "J_Bip_R_Index1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandIndex2Link": {
+        "Name": "J_Bip_R_Index2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandIndex3Link": {
+        "Name": "J_Bip_R_Index3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandMiddle1Link": {
+        "Name": "J_Bip_R_Middle1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandMiddle2Link": {
+        "Name": "J_Bip_R_Middle2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandMiddle3Link": {
+        "Name": "J_Bip_R_Middle3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandRing1Link": {
+        "Name": "J_Bip_R_Ring1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandRing2Link": {
+        "Name": "J_Bip_R_Ring2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandRing3Link": {
+        "Name": "J_Bip_R_Ring3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandPinky1Link": {
+        "Name": "J_Bip_R_Little1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandPinky2Link": {
+        "Name": "J_Bip_R_Little2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandPinky3Link": {
+        "Name": "J_Bip_R_Little3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    }
 }

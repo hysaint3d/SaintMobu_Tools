@@ -1,55 +1,412 @@
 {
     "DisplayName": "Japanese MMD / Game",
     "Description": "Japanese game & MMD (MikuMikuDance) naming (HipMaster, Torso, Arm, Elbow, Wrist, etc.)",
-    "HipsLink": "HipMaster",
-    "SpineLink": "Torso",
-    "Spine1Link": "Torso2",
-    "NeckLink": "Neck",
-    "HeadLink": "Head",
-    "LeftShoulderLink": "LeftShoulder",
-    "LeftArmLink": "LeftArm",
-    "LeftForeArmLink": "LeftElbow",
-    "LeftHandLink": "LeftWrist",
-    "RightShoulderLink": "RightShoulder",
-    "RightArmLink": "RightArm",
-    "RightForeArmLink": "RightElbow",
-    "RightHandLink": "RightWrist",
-    "LeftUpLegLink": "LeftHip",
-    "LeftLegLink": "LeftKnee",
-    "LeftFootLink": "LeftAnkle",
-    "LeftToeBaseLink": "LeftToe",
-    "RightUpLegLink": "RightHip",
-    "RightLegLink": "RightKnee",
-    "RightFootLink": "RightAnkle",
-    "RightToeBaseLink": "RightToe",
-    "LeftHandThumb1Link": "LeftThumb1",
-    "LeftHandThumb2Link": "LeftThumb2",
-    "LeftHandThumb3Link": "LeftThumb3",
-    "LeftHandIndex1Link": "LeftIndex1",
-    "LeftHandIndex2Link": "LeftIndex2",
-    "LeftHandIndex3Link": "LeftIndex3",
-    "LeftHandMiddle1Link": "LeftMiddle1",
-    "LeftHandMiddle2Link": "LeftMiddle2",
-    "LeftHandMiddle3Link": "LeftMiddle3",
-    "LeftHandRing1Link": "LeftRing1",
-    "LeftHandRing2Link": "LeftRing2",
-    "LeftHandRing3Link": "LeftRing3",
-    "LeftHandPinky1Link": "LeftLittle1",
-    "LeftHandPinky2Link": "LeftLittle2",
-    "LeftHandPinky3Link": "LeftLittle3",
-    "RightHandThumb1Link": "RightThumb1",
-    "RightHandThumb2Link": "RightThumb2",
-    "RightHandThumb3Link": "RightThumb3",
-    "RightHandIndex1Link": "RightIndex1",
-    "RightHandIndex2Link": "RightIndex2",
-    "RightHandIndex3Link": "RightIndex3",
-    "RightHandMiddle1Link": "RightMiddle1",
-    "RightHandMiddle2Link": "RightMiddle2",
-    "RightHandMiddle3Link": "RightMiddle3",
-    "RightHandRing1Link": "RightRing1",
-    "RightHandRing2Link": "RightRing2",
-    "RightHandRing3Link": "RightRing3",
-    "RightHandPinky1Link": "RightLittle1",
-    "RightHandPinky2Link": "RightLittle2",
-    "RightHandPinky3Link": "RightLittle3"
+    "HipsLink": {
+        "Name": "HipMaster",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "SpineLink": {
+        "Name": "Torso",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "Spine1Link": {
+        "Name": "Torso2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "NeckLink": {
+        "Name": "Neck",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "HeadLink": {
+        "Name": "Head",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftShoulderLink": {
+        "Name": "LeftShoulder",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftArmLink": {
+        "Name": "LeftArm",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftForeArmLink": {
+        "Name": "LeftElbow",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandLink": {
+        "Name": "LeftWrist",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightShoulderLink": {
+        "Name": "RightShoulder",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightArmLink": {
+        "Name": "RightArm",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightForeArmLink": {
+        "Name": "RightElbow",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandLink": {
+        "Name": "RightWrist",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftUpLegLink": {
+        "Name": "LeftHip",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftLegLink": {
+        "Name": "LeftKnee",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftFootLink": {
+        "Name": "LeftAnkle",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftToeBaseLink": {
+        "Name": "LeftToe",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightUpLegLink": {
+        "Name": "RightHip",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightLegLink": {
+        "Name": "RightKnee",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightFootLink": {
+        "Name": "RightAnkle",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightToeBaseLink": {
+        "Name": "RightToe",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandThumb1Link": {
+        "Name": "LeftThumb1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandThumb2Link": {
+        "Name": "LeftThumb2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandThumb3Link": {
+        "Name": "LeftThumb3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandIndex1Link": {
+        "Name": "LeftIndex1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandIndex2Link": {
+        "Name": "LeftIndex2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandIndex3Link": {
+        "Name": "LeftIndex3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandMiddle1Link": {
+        "Name": "LeftMiddle1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandMiddle2Link": {
+        "Name": "LeftMiddle2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandMiddle3Link": {
+        "Name": "LeftMiddle3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandRing1Link": {
+        "Name": "LeftRing1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandRing2Link": {
+        "Name": "LeftRing2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandRing3Link": {
+        "Name": "LeftRing3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandPinky1Link": {
+        "Name": "LeftLittle1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandPinky2Link": {
+        "Name": "LeftLittle2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandPinky3Link": {
+        "Name": "LeftLittle3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandThumb1Link": {
+        "Name": "RightThumb1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandThumb2Link": {
+        "Name": "RightThumb2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandThumb3Link": {
+        "Name": "RightThumb3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandIndex1Link": {
+        "Name": "RightIndex1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandIndex2Link": {
+        "Name": "RightIndex2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandIndex3Link": {
+        "Name": "RightIndex3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandMiddle1Link": {
+        "Name": "RightMiddle1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandMiddle2Link": {
+        "Name": "RightMiddle2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandMiddle3Link": {
+        "Name": "RightMiddle3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandRing1Link": {
+        "Name": "RightRing1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandRing2Link": {
+        "Name": "RightRing2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandRing3Link": {
+        "Name": "RightRing3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandPinky1Link": {
+        "Name": "RightLittle1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandPinky2Link": {
+        "Name": "RightLittle2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandPinky3Link": {
+        "Name": "RightLittle3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    }
 }

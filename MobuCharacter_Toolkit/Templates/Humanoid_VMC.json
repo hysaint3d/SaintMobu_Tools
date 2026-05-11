@@ -1,57 +1,428 @@
 {
     "DisplayName": "Standard VMC",
     "Description": "Standard VMC (Virtual Motion Capture) protocol naming.",
-    "ReferenceLink": "Root",
-    "HipsLink": "Hips",
-    "SpineLink": "Spine",
-    "Spine1Link": "Chest",
-    "Spine2Link": "UpperChest",
-    "NeckLink": "Neck",
-    "HeadLink": "Head",
-    "LeftShoulderLink": "LeftShoulder",
-    "LeftArmLink": "LeftUpperArm",
-    "LeftForeArmLink": "LeftLowerArm",
-    "LeftHandLink": "LeftHand",
-    "RightShoulderLink": "RightShoulder",
-    "RightArmLink": "RightUpperArm",
-    "RightForeArmLink": "RightLowerArm",
-    "RightHandLink": "RightHand",
-    "LeftUpLegLink": "LeftUpperLeg",
-    "LeftLegLink": "LeftLowerLeg",
-    "LeftFootLink": "LeftFoot",
-    "LeftToeBaseLink": "LeftToes",
-    "RightUpLegLink": "RightUpperLeg",
-    "RightLegLink": "RightLowerLeg",
-    "RightFootLink": "RightFoot",
-    "RightToeBaseLink": "RightToes",
-    "LeftHandThumb1Link": "LeftThumbProximal",
-    "LeftHandThumb2Link": "LeftThumbIntermediate",
-    "LeftHandThumb3Link": "LeftThumbDistal",
-    "LeftHandIndex1Link": "LeftIndexProximal",
-    "LeftHandIndex2Link": "LeftIndexIntermediate",
-    "LeftHandIndex3Link": "LeftIndexDistal",
-    "LeftHandMiddle1Link": "LeftMiddleProximal",
-    "LeftHandMiddle2Link": "LeftMiddleIntermediate",
-    "LeftHandMiddle3Link": "LeftMiddleDistal",
-    "LeftHandRing1Link": "LeftRingProximal",
-    "LeftHandRing2Link": "LeftRingIntermediate",
-    "LeftHandRing3Link": "LeftRingDistal",
-    "LeftHandPinky1Link": "LeftLittleProximal",
-    "LeftHandPinky2Link": "LeftLittleIntermediate",
-    "LeftHandPinky3Link": "LeftLittleDistal",
-    "RightHandThumb1Link": "RightThumbProximal",
-    "RightHandThumb2Link": "RightThumbIntermediate",
-    "RightHandThumb3Link": "RightThumbDistal",
-    "RightHandIndex1Link": "RightIndexProximal",
-    "RightHandIndex2Link": "RightIndexIntermediate",
-    "RightHandIndex3Link": "RightIndexDistal",
-    "RightHandMiddle1Link": "RightMiddleProximal",
-    "RightHandMiddle2Link": "RightMiddleIntermediate",
-    "RightHandMiddle3Link": "RightMiddleDistal",
-    "RightHandRing1Link": "RightRingProximal",
-    "RightHandRing2Link": "RightRingIntermediate",
-    "RightHandRing3Link": "RightRingDistal",
-    "RightHandPinky1Link": "RightLittleProximal",
-    "RightHandPinky2Link": "RightLittleIntermediate",
-    "RightHandPinky3Link": "RightLittleDistal"
+    "ReferenceLink": {
+        "Name": "Root",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "HipsLink": {
+        "Name": "Hips",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "SpineLink": {
+        "Name": "Spine",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "Spine1Link": {
+        "Name": "Chest",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "Spine2Link": {
+        "Name": "UpperChest",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "NeckLink": {
+        "Name": "Neck",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "HeadLink": {
+        "Name": "Head",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftShoulderLink": {
+        "Name": "LeftShoulder",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftArmLink": {
+        "Name": "LeftUpperArm",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftForeArmLink": {
+        "Name": "LeftLowerArm",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandLink": {
+        "Name": "LeftHand",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightShoulderLink": {
+        "Name": "RightShoulder",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightArmLink": {
+        "Name": "RightUpperArm",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightForeArmLink": {
+        "Name": "RightLowerArm",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandLink": {
+        "Name": "RightHand",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftUpLegLink": {
+        "Name": "LeftUpperLeg",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftLegLink": {
+        "Name": "LeftLowerLeg",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftFootLink": {
+        "Name": "LeftFoot",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftToeBaseLink": {
+        "Name": "LeftToes",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightUpLegLink": {
+        "Name": "RightUpperLeg",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightLegLink": {
+        "Name": "RightLowerLeg",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightFootLink": {
+        "Name": "RightFoot",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightToeBaseLink": {
+        "Name": "RightToes",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandThumb1Link": {
+        "Name": "LeftThumbProximal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandThumb2Link": {
+        "Name": "LeftThumbIntermediate",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandThumb3Link": {
+        "Name": "LeftThumbDistal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandIndex1Link": {
+        "Name": "LeftIndexProximal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandIndex2Link": {
+        "Name": "LeftIndexIntermediate",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandIndex3Link": {
+        "Name": "LeftIndexDistal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandMiddle1Link": {
+        "Name": "LeftMiddleProximal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandMiddle2Link": {
+        "Name": "LeftMiddleIntermediate",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandMiddle3Link": {
+        "Name": "LeftMiddleDistal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandRing1Link": {
+        "Name": "LeftRingProximal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandRing2Link": {
+        "Name": "LeftRingIntermediate",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandRing3Link": {
+        "Name": "LeftRingDistal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandPinky1Link": {
+        "Name": "LeftLittleProximal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandPinky2Link": {
+        "Name": "LeftLittleIntermediate",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandPinky3Link": {
+        "Name": "LeftLittleDistal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandThumb1Link": {
+        "Name": "RightThumbProximal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandThumb2Link": {
+        "Name": "RightThumbIntermediate",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandThumb3Link": {
+        "Name": "RightThumbDistal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandIndex1Link": {
+        "Name": "RightIndexProximal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandIndex2Link": {
+        "Name": "RightIndexIntermediate",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandIndex3Link": {
+        "Name": "RightIndexDistal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandMiddle1Link": {
+        "Name": "RightMiddleProximal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandMiddle2Link": {
+        "Name": "RightMiddleIntermediate",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandMiddle3Link": {
+        "Name": "RightMiddleDistal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandRing1Link": {
+        "Name": "RightRingProximal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandRing2Link": {
+        "Name": "RightRingIntermediate",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandRing3Link": {
+        "Name": "RightRingDistal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandPinky1Link": {
+        "Name": "RightLittleProximal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandPinky2Link": {
+        "Name": "RightLittleIntermediate",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandPinky3Link": {
+        "Name": "RightLittleDistal",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    }
 }

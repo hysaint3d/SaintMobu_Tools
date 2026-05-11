@@ -1,42 +1,308 @@
 {
     "DisplayName": "AccuRig",
     "Description": "Reallusion AccuRig standard naming.",
-    "ReferenceLink": "CC_Base_BoneRoot",
-    "HipsLink": "CC_Base_Hip",
-    "SpineLink": "CC_Base_Waist",
-    "Spine1Link": "CC_Base_Spine01",
-    "Spine2Link": "CC_Base_Spine02",
-    "NeckLink": "CC_Base_NeckTwist01",
-    "HeadLink": "CC_Base_Head",
-    "LeftShoulderLink": "CC_Base_L_Clavicle",
-    "LeftArmLink": "CC_Base_L_Upperarm",
-    "LeftForeArmLink": "CC_Base_L_Forearm",
-    "LeftHandLink": "CC_Base_L_Hand",
-    "RightShoulderLink": "CC_Base_R_Clavicle",
-    "RightArmLink": "CC_Base_R_Upperarm",
-    "RightForeArmLink": "CC_Base_R_Forearm",
-    "RightHandLink": "CC_Base_R_Hand",
-    "LeftUpLegLink": "CC_Base_L_Thigh",
-    "LeftLegLink": "CC_Base_L_Calf",
-    "LeftFootLink": "CC_Base_L_Foot",
-    "LeftToeBaseLink": "CC_Base_L_ToeBase",
-    "RightUpLegLink": "CC_Base_R_Thigh",
-    "RightLegLink": "CC_Base_R_Calf",
-    "RightFootLink": "CC_Base_R_Foot",
-    "RightToeBaseLink": "CC_Base_R_ToeBase",
-    "LeftHandThumb1Link": "CC_Base_L_Thumb1",
-    "LeftHandThumb2Link": "CC_Base_L_Thumb2",
-    "LeftHandThumb3Link": "CC_Base_L_Thumb3",
-    "LeftHandIndex1Link": "CC_Base_L_Index1",
-    "LeftHandIndex2Link": "CC_Base_L_Index2",
-    "LeftHandIndex3Link": "CC_Base_L_Index3",
-    "LeftHandMiddle1Link": "CC_Base_L_Mid1",
-    "LeftHandMiddle2Link": "CC_Base_L_Mid2",
-    "LeftHandMiddle3Link": "CC_Base_L_Mid3",
-    "LeftHandRing1Link": "CC_Base_L_Ring1",
-    "LeftHandRing2Link": "CC_Base_L_Ring2",
-    "LeftHandRing3Link": "CC_Base_L_Ring3",
-    "LeftHandPinky1Link": "CC_Base_L_Pinky1",
-    "LeftHandPinky2Link": "CC_Base_L_Pinky2",
-    "LeftHandPinky3Link": "CC_Base_L_Pinky3"
+    "ReferenceLink": {
+        "Name": "CC_Base_BoneRoot",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "HipsLink": {
+        "Name": "CC_Base_Hip",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "SpineLink": {
+        "Name": "CC_Base_Waist",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "Spine1Link": {
+        "Name": "CC_Base_Spine01",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "Spine2Link": {
+        "Name": "CC_Base_Spine02",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "NeckLink": {
+        "Name": "CC_Base_NeckTwist01",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "HeadLink": {
+        "Name": "CC_Base_Head",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftShoulderLink": {
+        "Name": "CC_Base_L_Clavicle",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftArmLink": {
+        "Name": "CC_Base_L_Upperarm",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftForeArmLink": {
+        "Name": "CC_Base_L_Forearm",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandLink": {
+        "Name": "CC_Base_L_Hand",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightShoulderLink": {
+        "Name": "CC_Base_R_Clavicle",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightArmLink": {
+        "Name": "CC_Base_R_Upperarm",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightForeArmLink": {
+        "Name": "CC_Base_R_Forearm",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightHandLink": {
+        "Name": "CC_Base_R_Hand",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftUpLegLink": {
+        "Name": "CC_Base_L_Thigh",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftLegLink": {
+        "Name": "CC_Base_L_Calf",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftFootLink": {
+        "Name": "CC_Base_L_Foot",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftToeBaseLink": {
+        "Name": "CC_Base_L_ToeBase",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightUpLegLink": {
+        "Name": "CC_Base_R_Thigh",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightLegLink": {
+        "Name": "CC_Base_R_Calf",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightFootLink": {
+        "Name": "CC_Base_R_Foot",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "RightToeBaseLink": {
+        "Name": "CC_Base_R_ToeBase",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandThumb1Link": {
+        "Name": "CC_Base_L_Thumb1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandThumb2Link": {
+        "Name": "CC_Base_L_Thumb2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandThumb3Link": {
+        "Name": "CC_Base_L_Thumb3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandIndex1Link": {
+        "Name": "CC_Base_L_Index1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandIndex2Link": {
+        "Name": "CC_Base_L_Index2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandIndex3Link": {
+        "Name": "CC_Base_L_Index3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandMiddle1Link": {
+        "Name": "CC_Base_L_Mid1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandMiddle2Link": {
+        "Name": "CC_Base_L_Mid2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandMiddle3Link": {
+        "Name": "CC_Base_L_Mid3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandRing1Link": {
+        "Name": "CC_Base_L_Ring1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandRing2Link": {
+        "Name": "CC_Base_L_Ring2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandRing3Link": {
+        "Name": "CC_Base_L_Ring3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandPinky1Link": {
+        "Name": "CC_Base_L_Pinky1",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandPinky2Link": {
+        "Name": "CC_Base_L_Pinky2",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    },
+    "LeftHandPinky3Link": {
+        "Name": "CC_Base_L_Pinky3",
+        "Rotation": [
+            0,
+            0,
+            0
+        ]
+    }
 }

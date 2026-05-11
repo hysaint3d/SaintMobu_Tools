@@ -27,7 +27,7 @@ def get_script_dir():
     if "__file__" in globals():
         return os.path.dirname(__file__)
     # Fallback for MoBu Python Editor
-    return r"C:\Users\hysaint\OneDrive\桌面\Antigravity\SaintMobu_Tools\MobuCharacter_Toolkit"
+    return r"c:\Users\hysaint\Desktop\Antigravity\SaintMobu_Tools\MobuCharacter_Toolkit"
 
 def get_template_dir():
     return os.path.join(get_script_dir(), "Templates")
@@ -279,10 +279,7 @@ def do_generate():
                     FBModelTransformationType.kModelTranslation, True)
         models[vmc_key] = m
 
-    for vmc_key, parent_key in HIERARCHY.items():
-        if vmc_key not in models: continue
-        models[vmc_key].Parent = root if parent_key is None else models.get(parent_key, root)
-
+    # 1. Set Global Rotations & Rotation Order BEFORE parenting
     use_custom_axis = g_ui.get("chk_use_custom_axis") and g_ui["chk_use_custom_axis"].State == 1
     for vmc_key, m in models.items():
         rot = [0, 0, 0]
@@ -290,9 +287,15 @@ def do_generate():
             hik_slot = HIK_LINK.get(vmc_key)
             if hik_slot and hik_slot in bmap:
                 val = bmap[hik_slot]
-                if isinstance(val, dict) and "Rotation" in val:
-                    rot = val["Rotation"]
+                if isinstance(val, dict):
+                    if "Rotation" in val: rot = val["Rotation"]
+                    if "RotationOrder" in val: m.RotationOrder = FBModelRotationOrder(val["RotationOrder"])
         m.SetVector(FBVector3d(rot[0], rot[1], rot[2]), FBModelTransformationType.kModelRotation, False)
+
+    # 2. Parent bones (maintains global transforms, calculates local automatically)
+    for vmc_key, parent_key in HIERARCHY.items():
+        if vmc_key not in models: continue
+        models[vmc_key].Parent = root if parent_key is None else models.get(parent_key, root)
 
     # Hide parent link on Hips to avoid ugly line from Root through the crotch
     if "Hips" in models:
@@ -483,8 +486,9 @@ def do_characterize():
             hik_slot = HIK_LINK.get(vmc_key)
             if hik_slot and hik_slot in bmap:
                 val = bmap[hik_slot]
-                if isinstance(val, dict) and "Rotation" in val:
-                    rot = val["Rotation"]
+                if isinstance(val, dict):
+                    if "Rotation" in val: rot = val["Rotation"]
+                    if "RotationOrder" in val: m.RotationOrder = FBModelRotationOrder(val["RotationOrder"])
         m.SetVector(FBVector3d(rot[0], rot[1], rot[2]), FBModelTransformationType.kModelRotation, False)
     if root:
         root.SetVector(FBVector3d(0,0,0), FBModelTransformationType.kModelRotation, False)
@@ -576,6 +580,7 @@ def OnAutoDetectClick(control, event):
             
         matched = 0
         for prop_name, expected_name in bmap.items():
+            if prop_name in ["DisplayName", "Description"]: continue
             if isinstance(expected_name, dict): expected_name = expected_name.get("Name", "")
             if not expected_name: continue
             exp = expected_name.strip().lower()
@@ -691,6 +696,7 @@ def do_quick_characterize(template_path):
         n_short = comp.Name.strip()
         
         for prop_name, expected_name in bmap.items():
+            if prop_name in ["DisplayName", "Description"]: continue
             if isinstance(expected_name, dict): expected_name = expected_name.get("Name", "")
             if not expected_name: continue
             exp = expected_name.strip()
@@ -714,10 +720,10 @@ def do_quick_characterize(template_path):
                 bip_prefix_norm = norm(bip_prefix)
                 if exp_norm_bip == "bip01": exp_norm = bip_prefix_norm
                 else:
-                    exp_norm = exp_norm.replace("bip01 ", bip_prefix + " ")
-                    exp_norm = exp_norm.replace("bip01_", bip_prefix + "_")
-                    exp_norm = exp_norm.replace("bip01.", bip_prefix + ".")
-                    exp_norm = exp_norm.replace("bip01", bip_prefix)
+                    exp_norm = exp_norm.replace("bip01 ", bip_prefix_norm + " ")
+                    exp_norm = exp_norm.replace("bip01_", bip_prefix_norm + "_")
+                    exp_norm = exp_norm.replace("bip01.", bip_prefix_norm + ".")
+                    exp_norm = exp_norm.replace("bip01", bip_prefix_norm)
 
             # Match conditions (Respect Fuzzy setting)
             is_match = False

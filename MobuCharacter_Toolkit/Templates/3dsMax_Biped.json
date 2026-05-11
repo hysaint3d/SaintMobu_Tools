@@ -1,56 +1,472 @@
 {
     "DisplayName": "3ds Max Biped",
     "Description": "Standard 3ds Max Biped naming convention (Bip01 as Hips).",
-    "HipsLink": "Bip01",
-    "SpineLink": "Bip01 Spine",
-    "Spine1Link": "Bip01 Spine1",
-    "Spine2Link": "Bip01 Spine2",
-    "NeckLink": "Bip01 Neck",
-    "HeadLink": "Bip01 Head",
-    "LeftShoulderLink": "Bip01 L Clavicle",
-    "LeftArmLink": "Bip01 L UpperArm",
-    "LeftForeArmLink": "Bip01 L Forearm",
-    "LeftHandLink": "Bip01 L Hand",
-    "RightShoulderLink": "Bip01 R Clavicle",
-    "RightArmLink": "Bip01 R UpperArm",
-    "RightForeArmLink": "Bip01 R Forearm",
-    "RightHandLink": "Bip01 R Hand",
-    "LeftUpLegLink": "Bip01 L Thigh",
-    "LeftLegLink": "Bip01 L Calf",
-    "LeftFootLink": "Bip01 L Foot",
-    "LeftToeBaseLink": "Bip01 L Toe0",
-    "RightUpLegLink": "Bip01 R Thigh",
-    "RightLegLink": "Bip01 R Calf",
-    "RightFootLink": "Bip01 R Foot",
-    "RightToeBaseLink": "Bip01 R Toe0",
-    "LeftHandThumb1Link": "Bip01 L Finger0",
-    "LeftHandThumb2Link": "Bip01 L Finger01",
-    "LeftHandThumb3Link": "Bip01 L Finger02",
-    "LeftHandIndex1Link": "Bip01 L Finger1",
-    "LeftHandIndex2Link": "Bip01 L Finger11",
-    "LeftHandIndex3Link": "Bip01 L Finger12",
-    "LeftHandMiddle1Link": "Bip01 L Finger2",
-    "LeftHandMiddle2Link": "Bip01 L Finger21",
-    "LeftHandMiddle3Link": "Bip01 L Finger22",
-    "LeftHandRing1Link": "Bip01 L Finger3",
-    "LeftHandRing2Link": "Bip01 L Finger31",
-    "LeftHandRing3Link": "Bip01 L Finger32",
-    "LeftHandPinky1Link": "Bip01 L Finger4",
-    "LeftHandPinky2Link": "Bip01 L Finger41",
-    "LeftHandPinky3Link": "Bip01 L Finger42",
-    "RightHandThumb1Link": "Bip01 R Finger0",
-    "RightHandThumb2Link": "Bip01 R Finger01",
-    "RightHandThumb3Link": "Bip01 R Finger02",
-    "RightHandIndex1Link": "Bip01 R Finger1",
-    "RightHandIndex2Link": "Bip01 R Finger11",
-    "RightHandIndex3Link": "Bip01 R Finger12",
-    "RightHandMiddle1Link": "Bip01 R Finger2",
-    "RightHandMiddle2Link": "Bip01 R Finger21",
-    "RightHandMiddle3Link": "Bip01 R Finger22",
-    "RightHandRing1Link": "Bip01 R Finger3",
-    "RightHandRing2Link": "Bip01 R Finger31",
-    "RightHandRing3Link": "Bip01 R Finger32",
-    "RightHandPinky1Link": "Bip01 R Finger4",
-    "RightHandPinky2Link": "Bip01 R Finger41",
-    "RightHandPinky3Link": "Bip01 R Finger42"
+    "HipsLink": {
+        "Name": "Bip01",
+        "Rotation": [
+            0.0,
+            0.0,
+            -90.0
+        ],
+        "RotationOrder": 0
+    },
+    "SpineLink": {
+        "Name": "Bip01 Spine",
+        "Rotation": [
+            -0.0,
+            -0.0,
+            0.046
+        ],
+        "RotationOrder": 0
+    },
+    "Spine1Link": {
+        "Name": "Bip01 Spine1",
+        "Rotation": [
+            -0.0,
+            0.0,
+            0.0
+        ],
+        "RotationOrder": 0
+    },
+    "Spine2Link": {
+        "Name": "Bip01 Spine2",
+        "Rotation": [
+            -0.0,
+            0.0,
+            0.0
+        ],
+        "RotationOrder": 0
+    },
+    "NeckLink": {
+        "Name": "Bip01 Neck",
+        "Rotation": [
+            -0.0,
+            0.0,
+            0.0
+        ],
+        "RotationOrder": 0
+    },
+    "HeadLink": {
+        "Name": "Bip01 Head",
+        "Rotation": [
+            -0.0,
+            0.0,
+            -0.046
+        ],
+        "RotationOrder": 0
+    },
+    "LeftShoulderLink": {
+        "Name": "Bip01 L Clavicle",
+        "Rotation": [
+            179.954,
+            -90.0,
+            0.0
+        ],
+        "RotationOrder": 0
+    },
+    "LeftArmLink": {
+        "Name": "Bip01 L UpperArm",
+        "Rotation": [
+            0.499,
+            -0.754,
+            5.701
+        ],
+        "RotationOrder": 0
+    },
+    "LeftForeArmLink": {
+        "Name": "Bip01 L Forearm",
+        "Rotation": [
+            0.0,
+            0.0,
+            -11.459
+        ],
+        "RotationOrder": 0
+    },
+    "LeftHandLink": {
+        "Name": "Bip01 L Hand",
+        "Rotation": [
+            -89.954,
+            0.0,
+            -0.0
+        ],
+        "RotationOrder": 0
+    },
+    "RightShoulderLink": {
+        "Name": "Bip01 R Clavicle",
+        "Rotation": [
+            -179.954,
+            90.0,
+            0.0
+        ],
+        "RotationOrder": 0
+    },
+    "RightArmLink": {
+        "Name": "Bip01 R UpperArm",
+        "Rotation": [
+            -0.499,
+            0.754,
+            5.701
+        ],
+        "RotationOrder": 0
+    },
+    "RightForeArmLink": {
+        "Name": "Bip01 R Forearm",
+        "Rotation": [
+            0.0,
+            0.0,
+            -11.459
+        ],
+        "RotationOrder": 0
+    },
+    "RightHandLink": {
+        "Name": "Bip01 R Hand",
+        "Rotation": [
+            89.954,
+            0.0,
+            -0.0
+        ],
+        "RotationOrder": 0
+    },
+    "LeftUpLegLink": {
+        "Name": "Bip01 L Thigh",
+        "Rotation": [
+            -0.0,
+            -180.0,
+            -5.775
+        ],
+        "RotationOrder": 0
+    },
+    "LeftLegLink": {
+        "Name": "Bip01 L Calf",
+        "Rotation": [
+            0.0,
+            0.0,
+            -11.459
+        ],
+        "RotationOrder": 0
+    },
+    "LeftFootLink": {
+        "Name": "Bip01 L Foot",
+        "Rotation": [
+            -0.0,
+            0.0,
+            5.73
+        ],
+        "RotationOrder": 0
+    },
+    "LeftToeBaseLink": {
+        "Name": "Bip01 L Toe0",
+        "Rotation": [
+            -0.0,
+            -0.0,
+            90.0
+        ],
+        "RotationOrder": 0
+    },
+    "RightUpLegLink": {
+        "Name": "Bip01 R Thigh",
+        "Rotation": [
+            -0.0,
+            -180.0,
+            -5.775
+        ],
+        "RotationOrder": 0
+    },
+    "RightLegLink": {
+        "Name": "Bip01 R Calf",
+        "Rotation": [
+            0.0,
+            0.0,
+            -11.459
+        ],
+        "RotationOrder": 0
+    },
+    "RightFootLink": {
+        "Name": "Bip01 R Foot",
+        "Rotation": [
+            -0.0,
+            0.0,
+            5.73
+        ],
+        "RotationOrder": 0
+    },
+    "RightToeBaseLink": {
+        "Name": "Bip01 R Toe0",
+        "Rotation": [
+            -0.0,
+            -0.0,
+            90.0
+        ],
+        "RotationOrder": 0
+    },
+    "LeftHandThumb1Link": {
+        "Name": "Bip01 L Finger0",
+        "Rotation": [
+            55.191,
+            10.014,
+            14.042
+        ],
+        "RotationOrder": 0
+    },
+    "LeftHandThumb2Link": {
+        "Name": "Bip01 L Finger01",
+        "Rotation": [
+            -0.0,
+            0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "LeftHandThumb3Link": {
+        "Name": "Bip01 L Finger02",
+        "Rotation": [
+            0.0,
+            -0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "LeftHandIndex1Link": {
+        "Name": "Bip01 L Finger1",
+        "Rotation": [
+            -0.046,
+            -0.0,
+            0.0
+        ],
+        "RotationOrder": 0
+    },
+    "LeftHandIndex2Link": {
+        "Name": "Bip01 L Finger11",
+        "Rotation": [
+            0.0,
+            0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "LeftHandIndex3Link": {
+        "Name": "Bip01 L Finger12",
+        "Rotation": [
+            -0.0,
+            -0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "LeftHandMiddle1Link": {
+        "Name": "Bip01 L Finger2",
+        "Rotation": [
+            -0.046,
+            -0.0,
+            0.0
+        ],
+        "RotationOrder": 0
+    },
+    "LeftHandMiddle2Link": {
+        "Name": "Bip01 L Finger21",
+        "Rotation": [
+            0.0,
+            0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "LeftHandMiddle3Link": {
+        "Name": "Bip01 L Finger22",
+        "Rotation": [
+            -0.0,
+            -0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "LeftHandRing1Link": {
+        "Name": "Bip01 L Finger3",
+        "Rotation": [
+            -0.046,
+            -0.0,
+            0.0
+        ],
+        "RotationOrder": 0
+    },
+    "LeftHandRing2Link": {
+        "Name": "Bip01 L Finger31",
+        "Rotation": [
+            0.0,
+            0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "LeftHandRing3Link": {
+        "Name": "Bip01 L Finger32",
+        "Rotation": [
+            -0.0,
+            -0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "LeftHandPinky1Link": {
+        "Name": "Bip01 L Finger4",
+        "Rotation": [
+            -0.046,
+            -0.0,
+            0.0
+        ],
+        "RotationOrder": 0
+    },
+    "LeftHandPinky2Link": {
+        "Name": "Bip01 L Finger41",
+        "Rotation": [
+            0.0,
+            0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "LeftHandPinky3Link": {
+        "Name": "Bip01 L Finger42",
+        "Rotation": [
+            -0.0,
+            -0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "RightHandThumb1Link": {
+        "Name": "Bip01 R Finger0",
+        "Rotation": [
+            -55.191,
+            -10.014,
+            14.042
+        ],
+        "RotationOrder": 0
+    },
+    "RightHandThumb2Link": {
+        "Name": "Bip01 R Finger01",
+        "Rotation": [
+            -0.0,
+            0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "RightHandThumb3Link": {
+        "Name": "Bip01 R Finger02",
+        "Rotation": [
+            0.0,
+            0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "RightHandIndex1Link": {
+        "Name": "Bip01 R Finger1",
+        "Rotation": [
+            0.046,
+            0.0,
+            0.0
+        ],
+        "RotationOrder": 0
+    },
+    "RightHandIndex2Link": {
+        "Name": "Bip01 R Finger11",
+        "Rotation": [
+            0.0,
+            -0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "RightHandIndex3Link": {
+        "Name": "Bip01 R Finger12",
+        "Rotation": [
+            -0.0,
+            0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "RightHandMiddle1Link": {
+        "Name": "Bip01 R Finger2",
+        "Rotation": [
+            0.046,
+            0.0,
+            0.0
+        ],
+        "RotationOrder": 0
+    },
+    "RightHandMiddle2Link": {
+        "Name": "Bip01 R Finger21",
+        "Rotation": [
+            0.0,
+            -0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "RightHandMiddle3Link": {
+        "Name": "Bip01 R Finger22",
+        "Rotation": [
+            -0.0,
+            0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "RightHandRing1Link": {
+        "Name": "Bip01 R Finger3",
+        "Rotation": [
+            0.046,
+            0.0,
+            0.0
+        ],
+        "RotationOrder": 0
+    },
+    "RightHandRing2Link": {
+        "Name": "Bip01 R Finger31",
+        "Rotation": [
+            0.0,
+            -0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "RightHandRing3Link": {
+        "Name": "Bip01 R Finger32",
+        "Rotation": [
+            -0.0,
+            0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "RightHandPinky1Link": {
+        "Name": "Bip01 R Finger4",
+        "Rotation": [
+            0.046,
+            0.0,
+            0.0
+        ],
+        "RotationOrder": 0
+    },
+    "RightHandPinky2Link": {
+        "Name": "Bip01 R Finger41",
+        "Rotation": [
+            0.0,
+            -0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    },
+    "RightHandPinky3Link": {
+        "Name": "Bip01 R Finger42",
+        "Rotation": [
+            -0.0,
+            0.0,
+            13.369
+        ],
+        "RotationOrder": 0
+    }
 }
