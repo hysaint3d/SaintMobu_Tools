@@ -193,7 +193,7 @@ def OnUIIdle(control, event):
             is_recording = False
             try:
                 player = FBPlayerControl()
-                is_recording = player.IsPlaying and (player.IsRecording or getattr(state, 'force_recording', False))
+                is_recording = player.IsPlaying and (player.IsRecording or getattr(state, 'force_recording', False) or getattr(sys, 'mobu_master_recording', False))
             except:
                 pass
                 
@@ -432,6 +432,7 @@ def OnForceRecordClick(control, event):
             
             if not new_take:
                 new_take = FBTake(take_name)
+                FBSystem().Scene.Takes.append(new_take)
             
             FBSystem().CurrentTake = new_take
             

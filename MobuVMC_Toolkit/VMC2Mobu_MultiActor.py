@@ -173,7 +173,7 @@ def OnUIIdle(control, event):
     try:
         player = FBPlayerControl()
         global_force_recording = any(getattr(state, 'force_recording', False) for state in g_vmc_states.values())
-        is_recording = player.IsPlaying and (player.IsRecording or global_force_recording)
+        is_recording = player.IsPlaying and (player.IsRecording or global_force_recording or getattr(sys, 'mobu_master_recording', False))
     except:
         pass
 

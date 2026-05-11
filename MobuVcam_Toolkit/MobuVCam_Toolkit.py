@@ -1072,13 +1072,13 @@ def OnUIIdle(c, e):
                 rx *= flip[3]; ry *= flip[4]; rz *= flip[5]     # apply flip state
         if osc_null:
             if tx is not None:
-                if g_state.get('is_recording'):
+                if g_state.get('is_recording') or getattr(sys, 'mobu_master_recording', False):
                     _key_vector(osc_null.Translation, [tx, ty, tz])
                 else:
                     try: osc_null.SetVector(FBVector3d(tx, ty, tz), FBModelTransformationType.kModelTranslation, True)
                     except: pass
             if rx is not None:
-                if g_state.get('is_recording'):
+                if g_state.get('is_recording') or getattr(sys, 'mobu_master_recording', False):
                     _key_vector(osc_null.Rotation, [rx, ry, rz])
                 else:
                     try: osc_null.SetVector(FBVector3d(rx, ry, rz), FBModelTransformationType.kModelRotation, True)
@@ -1118,7 +1118,7 @@ def OnUIIdle(c, e):
                 rz = rrz * flip[5]
                 ovr_null = g_state.get('ovr_data_null')
                 if ovr_null:
-                    if g_state.get('is_recording'):
+                    if g_state.get('is_recording') or getattr(sys, 'mobu_master_recording', False):
                         _key_vector(ovr_null.Translation, [tx, ty, tz])
                         _key_vector(ovr_null.Rotation, [rx, ry, rz])
                     else:
@@ -1169,7 +1169,7 @@ def OnUIIdle(c, e):
         except: pass
 
     # ── Ensure FOV is continuously keyed during recording ──────────────────
-    if g_state.get('is_recording'):
+    if g_state.get('is_recording') or getattr(sys, 'mobu_master_recording', False):
         cam = g_state.get('camera')
         if cam:
             try:

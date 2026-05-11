@@ -1,0 +1,30 @@
+{
+  "take_name": "LALA_Take",
+  "mobu": {
+    "ip": "127.0.0.1",
+    "port": "9000",
+    "enabled": true
+  },
+  "motive": {
+    "ip": "127.0.0.1",
+    "port": "1510",
+    "enabled": false,
+    "version": "2.x"
+  },
+  "obs": {
+    "ip": "127.0.0.1",
+    "port": "4455",
+    "enabled": false,
+    "password": ""
+  },
+  "ue5": {
+    "ip": "127.0.0.1",
+    "port": "30010",
+    "enabled": false
+  },
+  "warudo": {
+    "ip": "127.0.0.1",
+    "port": "39539",
+    "enabled": false
+  }
+}
