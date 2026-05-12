@@ -1,3 +1,25 @@
+"""
+MobuBridge_GUI.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WebSocket to OSC/LiveLink Bridge for Saint's Mobu FacialTracker.
+Acts as a middleware that receives tracking data from a web browser via WebSockets
+and forwards it to MotionBuilder using VMC (OSC) or Apple LiveLink (Binary) protocols.
+
+Workflow:
+  1. Launch this script (or start_GUI_bridge.bat).
+  2. Select Mode:
+     - VMC: For standard Facial Blendshape & Hand tracking mapping.
+     - LiveLinkFace: For direct ARKit-style streaming to Mobu/Unreal.
+  3. Set Target IP (usually 127.0.0.1) and Target Port (39539 for VMC, 11111 for LiveLink).
+  4. Click [START BRIDGE].
+  5. Open 'MobuFacial_WebTracker.html' in your browser (Mobile or PC).
+  6. In the browser, enter the IP displayed in this GUI and click [Connect Bridge].
+  7. Start Capture in the browser to begin streaming.
+
+由小聖腦絲與 Antigravity 協作完成
+https://www.facebook.com/hysaint3d.mocap
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
 import sys
 import subprocess
 import socket
