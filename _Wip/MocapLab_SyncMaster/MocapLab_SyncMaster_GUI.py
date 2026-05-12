@@ -520,8 +520,8 @@ class SyncMasterApp:
         targets_frame.pack(fill=tk.X, padx=16, pady=6)
 
         self.targets = {}
-        self._add_target(targets_frame, "mobu",   "MotionBuilder", "127.0.0.1", "9000")
         self._add_motive(targets_frame)
+        self._add_target(targets_frame, "mobu",   "MotionBuilder", "127.0.0.1", "9000")
         self._add_target(targets_frame, "ue5",    "Unreal Engine 5", "127.0.0.1", "30010")
         self._add_target(targets_frame, "warudo", "Warudo (WebSocket)", "127.0.0.1", "19190", default_on=False)
 
