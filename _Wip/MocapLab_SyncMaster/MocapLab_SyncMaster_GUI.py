@@ -110,20 +110,60 @@ def send_mobu(ip, port, cmd, log, take_name=""):
 
 
 def send_motive(ip, port, cmd, version, log, take_name=""):
-    """Send XML Remote Trigger to Optitrack Motive (standard for 2.x/3.x)."""
+    """Send XML Remote Trigger AND NatNet Command to Optitrack Motive."""
     try:
-        # Motive XML Remote Trigger format
+        # 1. Prepare XML Payload (Legacy/Port 1512)
+        # Use single-line format, standard for Motive 3.x XML triggering
         if cmd == "start":
-            xml = f'<?xml version="1.0" encoding="UTF-8" standalone="no" ?><CaptureStart><Name VALUE="{take_name}"/></CaptureStart>'
-            action_log = "CaptureStart"
+            xml = (f'<?xml version="1.0" encoding="UTF-8" standalone="no" ?>'
+                   f'<CaptureStart><Name VALUE="{take_name}"/><SessionName VALUE=""/><Notes VALUE=""/></CaptureStart>')
         else:
             xml = '<?xml version="1.0" encoding="UTF-8" standalone="no" ?><CaptureStop/>'
-            action_log = "CaptureStop"
 
+        # 2. Prepare NatNet Binary Commands (Modern/Port 1510)
+        # NatNet Packet: [MessageID (2 bytes)] [ByteCount (2 bytes)] [Payload]
+        # MessageID 2 = NAT_REQUEST
+        def pack_natnet(s):
+            payload = s.encode('utf-8') + b'\x00'
+            return struct.pack('<HH', 2, len(payload)) + payload
+
+        natnet_cmds = []
+        if cmd == "start":
+            natnet_cmds.append(pack_natnet(f"SetRecordTakeName,{take_name}"))
+            natnet_cmds.append(pack_natnet("StartRecording"))
+        else:
+            natnet_cmds.append(pack_natnet("StopRecording"))
+
+        # 3. Dispatching
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(xml.encode('utf-8'), (ip, int(port)))
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        
+        targets = [(ip, int(port))]
+        # Always try broadcast to bypass NIC binding issues
+        targets.append(("255.255.255.255", int(port)))
+        
+        # Command port (usually 1510)
+        cmd_port = 1510
+        cmd_targets = [(ip, cmd_port), ("255.255.255.255", cmd_port)]
+
+        # Send XML to 1512 targets
+        xml_bytes = xml.encode('utf-8')
+        for target in targets:
+            try: sock.sendto(xml_bytes, target)
+            except: pass
+        
+        # Send NatNet Commands to 1510 targets
+        for n_pkt in natnet_cmds:
+            for target in cmd_targets:
+                try: sock.sendto(n_pkt, target)
+                except: pass
+            time.sleep(0.05) # short gap between commands
+
         sock.close()
-        log(f"[Motive] {action_log} → {ip}:{port} (Take: {take_name if cmd=='start' else 'N/A'}) ✔")
+        
+        log(f"[Motive] Dual-Trigger ({cmd}) → {ip}:{port} & {ip}:{cmd_port} ✔")
+        if version == "3.x":
+             log("[Motive] Info: Sent both XML (1512) and NatNet Command (1510).")
     except Exception as e:
         log(f"[Motive] ERROR: {e}")
 
