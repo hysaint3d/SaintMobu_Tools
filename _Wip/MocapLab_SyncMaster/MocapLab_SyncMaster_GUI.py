@@ -523,7 +523,7 @@ class SyncMasterApp:
         self._add_target(targets_frame, "mobu",   "MotionBuilder", "127.0.0.1", "9000")
         self._add_motive(targets_frame)
         self._add_target(targets_frame, "ue5",    "Unreal Engine 5", "127.0.0.1", "30010")
-        self._add_target(targets_frame, "warudo", "Warudo (Web)", "127.0.0.1", "19190", default_on=False)
+        self._add_target(targets_frame, "warudo", "Warudo (WebSocket)", "127.0.0.1", "19190", default_on=False)
 
         # Video Ctrl panel
         video_frame = ttk.LabelFrame(self.root, text=" Video Ctrl ", padding=10)
