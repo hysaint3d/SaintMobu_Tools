@@ -3,7 +3,7 @@ MobuBridge_GUI.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 WebSocket to OSC/LiveLink Bridge for Saint's Mobu FacialTracker.
 Acts as a middleware that receives tracking data from a web browser via WebSockets
-and forwards it to MotionBuilder using VMC (OSC) or Apple LiveLink (Binary) protocols.
+and forwards it to MotionBuilder using VMC (OSC) or UnrealEngine LiveLinkFace (Binary) protocols.
 
 Workflow:
   1. Launch this script (or start_GUI_bridge.bat).

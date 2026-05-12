@@ -109,25 +109,21 @@ def send_mobu(ip, port, cmd, log, take_name=""):
         log(f"[Mobu] ERROR: {e}")
 
 
-def send_motive(ip, port, cmd, version, log):
-    """Send NatNet Remote Trigger to Optitrack Motive."""
+def send_motive(ip, port, cmd, version, log, take_name=""):
+    """Send XML Remote Trigger to Optitrack Motive (standard for 2.x/3.x)."""
     try:
-        if version == "2.x":
-            # NatNet 2.x: MessageID 3=Start, 4=Stop
-            msg_id = 3 if cmd == "start" else 4
-            data = struct.pack('<HH', msg_id, 0)
+        # Motive XML Remote Trigger format
+        if cmd == "start":
+            xml = f'<?xml version="1.0" encoding="UTF-8" standalone="no" ?><CaptureStart><Name VALUE="{take_name}"/></CaptureStart>'
+            action_log = "CaptureStart"
         else:
-            # NatNet 3.x: MessageID 7 with command payload
-            cmd_id = 1 if cmd == "start" else 2  # 1=Start, 2=Stop
-            header = struct.pack('<HH', 7, 4)
-            payload = struct.pack('<I', cmd_id)
-            data = header + payload
+            xml = '<?xml version="1.0" encoding="UTF-8" standalone="no" ?><CaptureStop/>'
+            action_log = "CaptureStop"
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(data, (ip, int(port)))
+        sock.sendto(xml.encode('utf-8'), (ip, int(port)))
         sock.close()
-        action = "StartRecording" if cmd == "start" else "StopRecording"
-        log(f"[Motive {version}] {action} → {ip}:{port} ✔")
+        log(f"[Motive] {action_log} → {ip}:{port} (Take: {take_name if cmd=='start' else 'N/A'}) ✔")
     except Exception as e:
         log(f"[Motive] ERROR: {e}")
 
@@ -484,7 +480,7 @@ class SyncMasterApp:
         ip_var = tk.StringVar(value="127.0.0.1")
         ttk.Entry(row, textvariable=ip_var, width=14).pack(side=tk.LEFT, padx=4)
 
-        port_var = tk.StringVar(value="1510")
+        port_var = tk.StringVar(value="1512")
         ttk.Entry(row, textvariable=port_var, width=7).pack(side=tk.LEFT)
 
         self.targets["motive"] = {"enabled": var, "ip": ip_var, "port": port_var, "version": ver_var}
@@ -606,7 +602,7 @@ class SyncMasterApp:
                           cmd, self.log, take_name)  # pass take name
             if t["motive"]["enabled"].get():
                 send_motive(t["motive"]["ip"].get(), t["motive"]["port"].get(),
-                            cmd, t["motive"]["version"].get(), self.log)
+                            cmd, t["motive"]["version"].get(), self.log, take_name)
             if t["obs"]["enabled"].get():
                 send_obs(t["obs"]["ip"].get(), t["obs"]["port"].get(),
                          t["obs"]["password"].get(), cmd, self.log)
