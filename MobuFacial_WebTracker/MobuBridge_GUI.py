@@ -49,6 +49,66 @@ def pack_osc_bundle(messages):
         bundle += msg
     return bundle
 
+# --- LiveLink Packing Logic ---
+ARKIT_BLENDSHAPES = [
+    "eyeBlinkLeft", "eyeLookDownLeft", "eyeLookInLeft", "eyeLookOutLeft", "eyeLookUpLeft",
+    "eyeSquintLeft", "eyeWideLeft", "eyeBlinkRight", "eyeLookDownRight", "eyeLookInRight",
+    "eyeLookOutRight", "eyeLookUpRight", "eyeSquintRight", "eyeWideRight", "jawForward",
+    "jawLeft", "jawRight", "jawOpen", "mouthClose", "mouthFunnel", "mouthPucker", "mouthLeft",
+    "mouthRight", "mouthSmileLeft", "mouthSmileRight", "mouthFrownLeft", "mouthFrownRight",
+    "mouthDimpleLeft", "mouthDimpleRight", "mouthStretchLeft", "mouthStretchRight",
+    "mouthRollLower", "mouthRollUpper", "mouthShrugLower", "mouthShrugUpper", "mouthPressLeft",
+    "mouthPressRight", "mouthLowerDownLeft", "mouthLowerDownRight", "mouthUpperUpLeft",
+    "mouthUpperUpRight", "browDownLeft", "browDownRight", "browInnerUp", "browOuterUpLeft",
+    "browOuterUpRight", "cheekPuff", "cheekSquintLeft", "cheekSquintRight", "noseSneerLeft",
+    "noseSneerRight", "tongueOut",
+    "HeadYaw", "HeadPitch", "HeadRoll",
+    "LeftEyeYaw", "LeftEyePitch", "LeftEyeRoll",
+    "RightEyeYaw", "RightEyePitch", "RightEyeRoll"
+]
+
+def quat_to_euler(x, y, z, w):
+    import math
+    # Pitch (x-axis rotation)
+    sinr_cosp = 2 * (w * x + y * z)
+    cosr_cosp = 1 - 2 * (x * x + y * y)
+    roll = math.atan2(sinr_cosp, cosr_cosp)
+    # Yaw (y-axis rotation)
+    sinp = 2 * (w * y - z * x)
+    if abs(sinp) >= 1: pitch = math.copysign(math.pi / 2, sinp)
+    else: pitch = math.asin(sinp)
+    # Roll (z-axis rotation)
+    siny_cosp = 2 * (w * z + x * y)
+    cosy_cosp = 1 - 2 * (y * y + z * z)
+    yaw = math.atan2(siny_cosp, cosy_cosp)
+    # Return in degrees: Pitch, Yaw, Roll
+    return math.degrees(roll), math.degrees(pitch), math.degrees(yaw)
+
+def pack_livelink_message(subject_name, blendshapes, head_rot_quat=None):
+    # Header: Version 6 (little-endian 4 bytes) + 37 bytes padding = 41 bytes
+    msg = struct.pack('<i', 6) + b'\x00' * 37
+    # Subject Name: Length (big-endian 4 bytes) + String
+    name_bytes = subject_name.encode('utf-8')
+    msg += struct.pack('!i', len(name_bytes)) + name_bytes
+    # Metadata: Frame (int), Subframe (float), FPS (int), Denom (int), DataLength (char=61) = 17 bytes
+    msg += struct.pack('!if2ib', 0, 0.0, 60, 1, 61)
+    
+    data = [0.0] * 61
+    # ARKit blendshapes (0-51)
+    for i, name in enumerate(ARKIT_BLENDSHAPES):
+        if i < 52:
+            data[i] = float(blendshapes.get(name, 0.0))
+        elif head_rot_quat:
+            # Map head rotation to HeadYaw, HeadPitch, HeadRoll (indices 52, 53, 54)
+            # Standard ARKit: HeadPitch=X, HeadYaw=Y, HeadRoll=Z
+            hp, hy, hr = quat_to_euler(*head_rot_quat)
+            if name == "HeadPitch": data[i] = hp
+            elif name == "HeadYaw": data[i] = hy
+            elif name == "HeadRoll": data[i] = hr
+            
+    msg += struct.pack('!61f', *data)
+    return msg
+
 # --- GUI Class ---
 class MobuBridgeGUI:
     def __init__(self, root):
@@ -81,6 +141,8 @@ class MobuBridgeGUI:
                     self.ip_entry.insert(0, config.get("target_ip", "127.0.0.1"))
                     self.port_entry.delete(0, tk.END)
                     self.port_entry.insert(0, config.get("target_port", "39539"))
+                    self.subject_entry.delete(0, tk.END)
+                    self.subject_entry.insert(0, config.get("subject_name", "MobuFace"))
                     self.ws_port_entry.delete(0, tk.END)
                     self.ws_port_entry.insert(0, config.get("ws_port", "8080"))
         except Exception as e:
@@ -92,6 +154,7 @@ class MobuBridgeGUI:
                 "mode": self.mode_var.get(),
                 "target_ip": self.ip_entry.get(),
                 "target_port": self.port_entry.get(),
+                "subject_name": self.subject_entry.get(),
                 "ws_port": self.ws_port_entry.get()
             }
             with open(self.config_file, 'w') as f:
@@ -124,7 +187,8 @@ class MobuBridgeGUI:
         # Mode Selection
         ttk.Label(config_frame, text="Mode:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.mode_var = tk.StringVar(value="VMC")
-        mode_cb = ttk.Combobox(config_frame, textvariable=self.mode_var, values=["VMC", "OSC (Generic)"], state="readonly")
+        mode_values = ["VMC", "OSC (Generic)", "LiveLinkFace"]
+        mode_cb = ttk.Combobox(config_frame, textvariable=self.mode_var, values=mode_values, state="readonly")
         mode_cb.grid(row=0, column=1, sticky=tk.EW, pady=5)
         mode_cb.bind("<<ComboboxSelected>>", self.on_mode_change)
 
@@ -140,11 +204,17 @@ class MobuBridgeGUI:
         self.port_entry.insert(0, "39539")
         self.port_entry.grid(row=2, column=1, sticky=tk.EW, pady=5)
 
+        # Subject Name (for LiveLink)
+        ttk.Label(config_frame, text="Subject Name:").grid(row=3, column=0, sticky=tk.W, pady=5)
+        self.subject_entry = ttk.Entry(config_frame)
+        self.subject_entry.insert(0, "MobuFace")
+        self.subject_entry.grid(row=3, column=1, sticky=tk.EW, pady=5)
+
         # WS Port
-        ttk.Label(config_frame, text="WS Listen Port:").grid(row=3, column=0, sticky=tk.W, pady=5)
+        ttk.Label(config_frame, text="WS Listen Port:").grid(row=4, column=0, sticky=tk.W, pady=5)
         self.ws_port_entry = ttk.Entry(config_frame)
         self.ws_port_entry.insert(0, "8080")
-        self.ws_port_entry.grid(row=3, column=1, sticky=tk.EW, pady=5)
+        self.ws_port_entry.grid(row=4, column=1, sticky=tk.EW, pady=5)
 
         config_frame.columnconfigure(1, weight=1)
 
@@ -177,9 +247,13 @@ class MobuBridgeGUI:
         footer.pack(pady=(10, 0))
 
     def on_mode_change(self, event=None):
-        if self.mode_var.get() == "VMC":
+        mode = self.mode_var.get()
+        if mode == "VMC":
             self.port_entry.delete(0, tk.END)
             self.port_entry.insert(0, "39539")
+        elif mode == "LiveLinkFace":
+            self.port_entry.delete(0, tk.END)
+            self.port_entry.insert(0, "11111")
         else:
             self.port_entry.delete(0, tk.END)
             self.port_entry.insert(0, "9000")
@@ -216,6 +290,7 @@ class MobuBridgeGUI:
 
     def start_bridge(self):
         self.target_ip = self.ip_entry.get()
+        self.subject_name = self.subject_entry.get() or "MobuFace"
         try:
             self.target_port = int(self.port_entry.get())
             self.ws_port = int(self.ws_port_entry.get())
@@ -228,6 +303,7 @@ class MobuBridgeGUI:
         self.btn_toggle.configure(text="STOP BRIDGE", style="Stop.TButton")
         self.packet_count = 0
         self.log(f">>> Bridge Started (Mode: {self.mode_var.get()})")
+        self.log(f">>> Subject Name: {self.subject_name}")
         self.log(f">>> Listening on WS:{self.ws_port}")
         self.log(f">>> Forwarding to {self.target_ip}:{self.target_port}")
 
@@ -254,15 +330,38 @@ class MobuBridgeGUI:
                     if not self.is_running: break
                     try:
                         data = json.loads(message)
-                        if isinstance(data, list):
+                        if not isinstance(data, list): continue
+                        
+                        mode = self.mode_var.get()
+                        if mode == "LiveLinkFace":
+                            # Extract blendshapes and head rotation from VMC-formatted messages
+                            blendshapes = {}
+                            head_rot = None
+                            for item in data:
+                                addr = item.get('addr')
+                                args = item.get('args', [])
+                                if addr == "/VMC/Ext/Blend/Val" and len(args) >= 2:
+                                    val = args[1] if args[1] is not None else 0.0
+                                    blendshapes[args[0]] = float(val)
+                                elif addr == "/VMC/Ext/Bone/Pos" and args[0] == "Head" and len(args) >= 8:
+                                    # Ensure rotation components are valid real numbers
+                                    head_rot = tuple(float(x) if x is not None else 0.0 for x in args[4:8])
+                            
+                            packet = pack_livelink_message(self.subject_name, blendshapes, head_rot)
+                            self.udp_sock.sendto(packet, (self.target_ip, self.target_port))
+                            self.packet_count += 1
+                        else:
+                            # Standard OSC Forwarding
                             osc_messages = [pack_osc_message(item['addr'], item['types'], *item['args']) for item in data]
                             if osc_messages:
                                 bundle = pack_osc_bundle(osc_messages)
                                 self.udp_sock.sendto(bundle, (self.target_ip, self.target_port))
                                 self.packet_count += len(osc_messages)
-                                if self.packet_count % 100 == 0:
-                                    self.root.after(0, lambda c=self.packet_count: self.log(f"Sent {c} packets..."))
-                    except: pass
+                        
+                        if self.packet_count % 100 == 0:
+                            self.root.after(0, lambda c=self.packet_count: self.log(f"Sent {c} packets..."))
+                    except Exception as e:
+                        self.root.after(0, lambda err=e: self.log(f"!!! Data Error: {err}"))
             except Exception as e:
                 self.root.after(0, lambda err=e: self.log(f"!!! WS Error: {err}"))
 

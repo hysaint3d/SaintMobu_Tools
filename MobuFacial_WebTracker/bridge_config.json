@@ -1,1 +1,1 @@
-{"mode": "VMC", "target_ip": "127.0.0.1", "target_port": "39539", "ws_port": "8080"}
+{"mode": "LiveLinkFace", "target_ip": "127.0.0.1", "target_port": "11112", "subject_name": "MobuFace", "ws_port": "8080"}
