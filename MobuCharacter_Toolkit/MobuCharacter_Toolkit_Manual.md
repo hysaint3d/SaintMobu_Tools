@@ -6,10 +6,15 @@
 
 ## 1. 核心功能模組
 
-### 🦴 生成標準骨架 (Generate Skeleton)
-- **功能**：根據預設的比例（170cm 基比）生成一組完美的 T-Pose 骨架。
-- **命名規範**：支援 **VMC**、**HIK** (MotionBuilder 內建) 以及 **UE** (Unreal Engine) 三種命名方式。
-- **應用場景**：當你需要一個乾淨的控制骨架，或是要為新角色建立 Target 骨架時。
+### 🦴 生成與對接標準骨架 (Skeleton Standardization)
+- **功能**：一鍵生成標準 T-Pose 骨架，或將現有模型對接到標準槽位。
+- **支援規範 (內建與模板)**：
+  - **DCC 軟體**：3ds Max (Biped), Blender (Rigify/AutoRigPro), Maya (AdvancedSkeleton)。
+  - **遊戲引擎**：UE Mannequin, UE MetaHuman, Unity Humanoid。
+  - **虛擬偶像/動漫**：VRoid, MMD (Japanese Game Standard)。
+  - **硬體與掃描**：AccuRig (Reallusion), VMC (VRM Standard)。
+  - **動捕標準**：Standard HIK。
+- **應用場景**：無論你的模型是從哪裡來的，只要選擇對應的模板，就能瞬間完成骨架映射與角色化。
 
 ### 🤖 自動角色化 (Auto Characterize)
 - **Smart Detect (智慧偵測)**：自動掃描場景中的骨架，利用模糊匹配算法將骨頭填入 HIK 槽位。
