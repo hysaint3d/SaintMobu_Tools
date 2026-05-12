@@ -1,5 +1,5 @@
 {
-  "take_name": "take",
+  "take_name": "Take",
   "mobu": {
     "ip": "127.0.0.1",
     "port": "9000",
@@ -11,12 +11,6 @@
     "enabled": false,
     "version": "3.x"
   },
-  "obs": {
-    "ip": "10.1.1.3",
-    "port": "4455",
-    "enabled": true,
-    "password": "03807628"
-  },
   "ue5": {
     "ip": "127.0.0.1",
     "port": "30010",
@@ -24,7 +18,14 @@
   },
   "warudo": {
     "ip": "127.0.0.1",
-    "port": "39539",
-    "enabled": false
+    "port": "19190",
+    "enabled": true
+  },
+  "obs": {
+    "ip": "127.0.0.1",
+    "port": "4455",
+    "enabled": false,
+    "password": "03807628",
+    "scene": "\u5834\u666f 2"
   }
 }

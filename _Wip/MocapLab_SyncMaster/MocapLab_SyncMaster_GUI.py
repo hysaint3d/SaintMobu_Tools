@@ -45,6 +45,7 @@ def _ensure(pkg, import_name=None):
 _ensure("flask")
 _ensure("obsws-python", "obsws_python")
 _ensure("requests")
+_ensure("websocket-client", "websocket")
 
 import requests
 from flask import Flask, request, jsonify, render_template_string, Response
@@ -168,12 +169,20 @@ def send_motive(ip, port, cmd, version, log, take_name=""):
         log(f"[Motive] ERROR: {e}")
 
 
-def send_obs(ip, port, password, cmd, log):
-    """Send StartRecord/StopRecord via obs-websocket v5."""
+def send_obs(ip, port, password, cmd, log, take_name=""):
+    """Send StartRecord/StopRecord via obs-websocket v5 with Filename Sync."""
     try:
         import obsws_python as obs
         cl = obs.ReqClient(host=ip, port=int(port), password=password, timeout=3)
         if cmd == "start":
+            # Synchronize Filename with Take Name
+            if take_name:
+                try:
+                    cl.set_profile_parameter("Output", "FilenameFormatting", take_name)
+                    log(f"[OBS] FilenameFormatting → {take_name}")
+                except Exception as ex:
+                    log(f"[OBS] Warning (SetFilename): {ex}")
+            
             cl.start_record()
             log(f"[OBS] StartRecord → {ip}:{port} ✔")
         else:
@@ -182,6 +191,31 @@ def send_obs(ip, port, password, cmd, log):
         cl.disconnect()
     except Exception as e:
         log(f"[OBS] ERROR: {e}")
+
+def obs_switch_scene(ip, port, password, scene_name, log):
+    """Manually switch OBS scene."""
+    try:
+        import obsws_python as obs
+        cl = obs.ReqClient(host=ip, port=int(port), password=password, timeout=3)
+        cl.set_current_program_scene(scene_name)
+        cl.disconnect()
+        log(f"[OBS] Scene switched → {scene_name} ✔")
+    except Exception as e:
+        log(f"[OBS] Switch Error: {e}")
+
+def obs_get_scenes(ip, port, password, log):
+    """Fetch all available scene names from OBS."""
+    try:
+        import obsws_python as obs
+        cl = obs.ReqClient(host=ip, port=int(port), password=password, timeout=3)
+        resp = cl.get_scene_list()
+        cl.disconnect()
+        scenes = [s['sceneName'] for s in resp.scenes]
+        log(f"[OBS] Fetched {len(scenes)} scenes ✔")
+        return scenes
+    except Exception as e:
+        log(f"[OBS] Fetch Error: {e}")
+        return []
 
 
 def send_ue5(ip, port, cmd, log):
@@ -194,15 +228,58 @@ def send_ue5(ip, port, cmd, log):
             "functionName": func,
             "parameters": {}
         }
-        resp = requests.put(url, json=body, timeout=3)
+        resp = requests.put(url, json=body, timeout=2)
         log(f"[UE5] {func} → {ip}:{port} [{resp.status_code}] ✔")
+        return True
     except Exception as e:
         log(f"[UE5] ERROR: {e}")
+        return False
+
+def check_target_online(key, ip, port, password=""):
+    """Check if a target is reachable (Background task)."""
+    try:
+        if key == "obs":
+            import obsws_python as obs
+            cl = obs.ReqClient(host=ip, port=int(port), password=password, timeout=1)
+            cl.disconnect()
+            return True
+        elif key == "ue5":
+            url = f"http://{ip}:{port}/remote/info"
+            requests.get(url, timeout=1)
+            return True
+        elif key == "warudo":
+            import websocket
+            ws = websocket.create_connection(f"ws://{ip}:{port}", timeout=1)
+            ws.close()
+            return True
+        else:
+            # For UDP targets (Mobu, Motive, etc.), we do a simple socket test
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.settimeout(1)
+            s.connect((ip, int(port)))
+            s.close()
+            return True
+    except:
+        return False
 
 
-def send_warudo(ip, port, cmd, log):
-    """Warudo recording trigger — placeholder, not yet implemented."""
-    log(f"[Warudo] Not yet implemented (reserved: {ip}:{port})")
+def send_warudo(ip, port, cmd, log, take_name=""):
+    """Send JSON action to Warudo via WebSocket (Compatible with 'On WebSocket Action' node)."""
+    try:
+        import websocket
+        ws = websocket.create_connection(f"ws://{ip}:{port}", timeout=2)
+        # Format for 'On WebSocket Action' node
+        payload = {
+            "action": "RecordStart" if cmd == "start" else "RecordStop",
+            "data": {
+                "take_name": take_name
+            }
+        }
+        ws.send(json.dumps(payload))
+        ws.close()
+        log(f"[Warudo] Action: {payload['action']} → {ip}:{port} ✔")
+    except Exception as e:
+        log(f"[Warudo] ERROR: {e}")
 
 # ── Web UI HTML ───────────────────────────────────────────────────────────────
 WEB_UI_HTML = """<!DOCTYPE html>
@@ -319,6 +396,34 @@ class SyncMasterApp:
         self._build_ui()
         self._load_config()
 
+        # Start Connection Watchdog
+        self.watchdog_thread = threading.Thread(target=self._connection_watchdog, daemon=True)
+        self.watchdog_thread.start()
+
+    def _connection_watchdog(self):
+        """Periodically check all enabled targets' connection status."""
+        while True:
+            for key, t in self.targets.items():
+                if not t["enabled"].get():
+                    self._set_status_light(key, "gray")
+                    continue
+                
+                self._set_status_light(key, "yellow")
+                ip = t["ip"].get()
+                port = t["port"].get()
+                pw = t.get("password").get() if "password" in t else ""
+                
+                is_online = check_target_online(key, ip, port, pw)
+                self._set_status_light(key, "green" if is_online else "red")
+            
+            time.sleep(5) # Check every 5 seconds
+
+    def _set_status_light(self, key, color):
+        colors = {"gray": "#333333", "yellow": "#fbc02d", "green": "#4caf50", "red": "#f44336"}
+        if key in self.targets and "light" in self.targets[key]:
+            canvas = self.targets[key]["light"]
+            self.root.after(0, lambda: canvas.itemconfig("circle", fill=colors.get(color, "#333333")))
+
     # ── Flask Web Server ──────────────────────────────────────────────────────
     def _build_flask(self):
         app = Flask(__name__)
@@ -400,7 +505,7 @@ class SyncMasterApp:
         pad = {"padx": 16, "pady": 4}
 
         # Title
-        ttk.Label(self.root, text="🎬  MocapLab SyncMaster Console", style="Title.TLabel").pack(pady=(18, 6))
+        ttk.Label(self.root, text="🎬  Saint's MocapLab SyncMaster Console", style="Title.TLabel").pack(pady=(18, 6))
 
         # Take Name
         take_frame = ttk.Frame(self.root)
@@ -417,9 +522,13 @@ class SyncMasterApp:
         self.targets = {}
         self._add_target(targets_frame, "mobu",   "MotionBuilder", "127.0.0.1", "9000")
         self._add_motive(targets_frame)
-        self._add_obs(targets_frame)
         self._add_target(targets_frame, "ue5",    "Unreal Engine 5", "127.0.0.1", "30010")
-        self._add_target(targets_frame, "warudo", "Warudo (reserved)", "127.0.0.1", "39539", default_on=False)
+        self._add_target(targets_frame, "warudo", "Warudo (Web)", "127.0.0.1", "19190", default_on=False)
+
+        # Video Ctrl panel
+        video_frame = ttk.LabelFrame(self.root, text=" Video Ctrl ", padding=10)
+        video_frame.pack(fill=tk.X, padx=16, pady=6)
+        self._add_obs(video_frame)
 
         # Timer
         self.timer_label = ttk.Label(self.root, text="00:00:00", style="Timer.TLabel")
@@ -486,25 +595,36 @@ class SyncMasterApp:
         self.log_area.pack(fill=tk.BOTH, expand=True, padx=16, pady=(0, 8))
 
         # Footer
-        ttk.Label(self.root, text="Mocap Lab × Antigravity  |  Saint's Motion Capture Tools",
-                  foreground="#333333", background="#1a1a1a",
-                  font=("Segoe UI", 8)).pack(pady=(0, 8))
+        footer_text = "Mocap Lab × Antigravity  |  Saint's Motion Capture Tools\n小聖腦絲的粉專: https://www.facebook.com/hysaint3d.mocap"
+        self.footer_label = ttk.Label(self.root, text=footer_text,
+                                      foreground="#444444", background="#1a1a1a",
+                                      font=("Segoe UI", 8), justify=tk.CENTER)
+        self.footer_label.pack(pady=(0, 8))
+        self.footer_label.bind("<Button-1>", lambda e: os.startfile("https://www.facebook.com/hysaint3d.mocap"))
+        self.footer_label.configure(cursor="hand2")
 
     def _add_target(self, parent, key, label, default_ip, default_port, default_on=True):
         row = ttk.Frame(parent)
         row.pack(fill=tk.X, pady=2)
 
         var = tk.BooleanVar(value=default_on)
-        chk = ttk.Checkbutton(row, text=label, variable=var, width=18)
+        chk = ttk.Checkbutton(row, text=label, variable=var, width=16)
         chk.pack(side=tk.LEFT)
 
+        ttk.Label(row, text=" IP:", width=3).pack(side=tk.LEFT)
         ip_var = tk.StringVar(value=default_ip)
-        ttk.Entry(row, textvariable=ip_var, width=14).pack(side=tk.LEFT, padx=4)
+        ttk.Entry(row, textvariable=ip_var, width=15).pack(side=tk.LEFT, padx=4)
 
+        ttk.Label(row, text="Port:", width=4).pack(side=tk.LEFT)
         port_var = tk.StringVar(value=default_port)
-        ttk.Entry(row, textvariable=port_var, width=7).pack(side=tk.LEFT)
+        ttk.Entry(row, textvariable=port_var, width=6).pack(side=tk.LEFT)
 
-        self.targets[key] = {"enabled": var, "ip": ip_var, "port": port_var}
+        # Status Light
+        light = tk.Canvas(row, width=12, height=12, bg="#1a1a1a", highlightthickness=0)
+        light.pack(side=tk.LEFT, padx=6)
+        light.create_oval(2, 2, 10, 10, fill="#333333", outline="", tags="circle")
+
+        self.targets[key] = {"enabled": var, "ip": ip_var, "port": port_var, "light": light}
 
     def _add_motive(self, parent):
         row = ttk.Frame(parent)
@@ -515,36 +635,72 @@ class SyncMasterApp:
 
         ver_var = tk.StringVar(value="2.x")
         ttk.Combobox(row, textvariable=ver_var, values=["2.x", "3.x"],
-                     state="readonly", width=4).pack(side=tk.LEFT, padx=(0, 4))
+                     state="readonly", width=3).pack(side=tk.LEFT, padx=(0, 4))
 
+        ttk.Label(row, text=" IP:", width=3).pack(side=tk.LEFT)
         ip_var = tk.StringVar(value="127.0.0.1")
-        ttk.Entry(row, textvariable=ip_var, width=14).pack(side=tk.LEFT, padx=4)
+        ttk.Entry(row, textvariable=ip_var, width=15).pack(side=tk.LEFT, padx=4)
 
+        ttk.Label(row, text="Port:", width=4).pack(side=tk.LEFT)
         port_var = tk.StringVar(value="1512")
-        ttk.Entry(row, textvariable=port_var, width=7).pack(side=tk.LEFT)
+        ttk.Entry(row, textvariable=port_var, width=6).pack(side=tk.LEFT)
 
-        self.targets["motive"] = {"enabled": var, "ip": ip_var, "port": port_var, "version": ver_var}
+        # Status Light
+        light = tk.Canvas(row, width=12, height=12, bg="#1a1a1a", highlightthickness=0)
+        light.pack(side=tk.LEFT, padx=6)
+        light.create_oval(2, 2, 10, 10, fill="#333333", outline="", tags="circle")
+
+        self.targets["motive"] = {"enabled": var, "ip": ip_var, "port": port_var, "version": ver_var, "light": light}
 
     def _add_obs(self, parent):
         row1 = ttk.Frame(parent)
         row1.pack(fill=tk.X, pady=2)
 
         var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(row1, text="OBS Studio", variable=var, width=18).pack(side=tk.LEFT)
+        ttk.Checkbutton(row1, text="OBS Studio", variable=var, width=16).pack(side=tk.LEFT)
 
+        ttk.Label(row1, text=" IP:", width=3).pack(side=tk.LEFT)
         ip_var = tk.StringVar(value="127.0.0.1")
-        ttk.Entry(row1, textvariable=ip_var, width=14).pack(side=tk.LEFT, padx=4)
+        ttk.Entry(row1, textvariable=ip_var, width=15).pack(side=tk.LEFT, padx=4)
 
+        ttk.Label(row1, text="Port:", width=4).pack(side=tk.LEFT)
         port_var = tk.StringVar(value="4455")
-        ttk.Entry(row1, textvariable=port_var, width=7).pack(side=tk.LEFT)
+        ttk.Entry(row1, textvariable=port_var, width=6).pack(side=tk.LEFT)
+
+        # Status Light
+        light = tk.Canvas(row1, width=12, height=12, bg="#1a1a1a", highlightthickness=0)
+        light.pack(side=tk.LEFT, padx=6)
+        light.create_oval(2, 2, 10, 10, fill="#333333", outline="", tags="circle")
 
         row2 = ttk.Frame(parent)
         row2.pack(fill=tk.X, pady=(0, 2))
-        ttk.Label(row2, text="Password:", width=18, anchor=tk.E).pack(side=tk.LEFT)
+        ttk.Label(row2, text="Password:", width=10, anchor=tk.E).pack(side=tk.LEFT)
         pw_var = tk.StringVar(value="")
-        ttk.Entry(row2, textvariable=pw_var, show="*", width=22).pack(side=tk.LEFT, padx=4)
+        ttk.Entry(row2, textvariable=pw_var, show="*", width=12).pack(side=tk.LEFT, padx=4)
 
-        self.targets["obs"] = {"enabled": var, "ip": ip_var, "port": port_var, "password": pw_var}
+        ttk.Label(row2, text="Scene:", width=6).pack(side=tk.LEFT)
+        scene_var = tk.StringVar(value="")
+        self.obs_scene_cb = ttk.Combobox(row2, textvariable=scene_var, width=15, state="readonly")
+        self.obs_scene_cb.pack(side=tk.LEFT, padx=4)
+
+        def fetch_scenes():
+            ip, port, pw = ip_var.get(), port_var.get(), pw_var.get()
+            scenes = obs_get_scenes(ip, port, pw, self.log)
+            if scenes:
+                self.obs_scene_cb['values'] = scenes
+                if not scene_var.get() and scenes:
+                    scene_var.set(scenes[0])
+
+        def switch_scene():
+            ip, port, pw = ip_var.get(), port_var.get(), pw_var.get()
+            sn = scene_var.get()
+            if sn:
+                threading.Thread(target=lambda: obs_switch_scene(ip, port, pw, sn, self.log), daemon=True).start()
+
+        ttk.Button(row2, text="🔄", width=4, command=fetch_scenes).pack(side=tk.LEFT)
+        ttk.Button(row2, text="Switch", width=7, command=switch_scene).pack(side=tk.LEFT, padx=2)
+
+        self.targets["obs"] = {"enabled": var, "ip": ip_var, "port": port_var, "password": pw_var, "scene": scene_var, "light": light}
 
     # ── Config ────────────────────────────────────────────────────────────────
     def _load_config(self):
@@ -559,8 +715,11 @@ class SyncMasterApp:
                         t["enabled"].set(cfg[key].get("enabled", True))
                         if key == "motive" and "version" in cfg[key]:
                             t["version"].set(cfg[key]["version"])
-                        if key == "obs" and "password" in cfg[key]:
-                            t["password"].set(cfg[key]["password"])
+                        if key == "obs":
+                            if "password" in cfg[key]:
+                                t["password"].set(cfg[key]["password"])
+                            if "scene" in cfg[key]:
+                                t["scene"].set(cfg[key]["scene"])
                 if "take_name" in cfg:
                     self.take_entry.delete(0, tk.END)
                     self.take_entry.insert(0, cfg["take_name"])
@@ -577,6 +736,7 @@ class SyncMasterApp:
                     entry["version"] = t["version"].get()
                 if key == "obs":
                     entry["password"] = t["password"].get()
+                    entry["scene"] = t["scene"].get()
                 cfg[key] = entry
             with open(self.config_path, "w") as f:
                 json.dump(cfg, f, indent=2)
@@ -645,11 +805,11 @@ class SyncMasterApp:
                             cmd, t["motive"]["version"].get(), self.log, take_name)
             if t["obs"]["enabled"].get():
                 send_obs(t["obs"]["ip"].get(), t["obs"]["port"].get(),
-                         t["obs"]["password"].get(), cmd, self.log)
+                         t["obs"]["password"].get(), cmd, self.log, take_name)
             if t["ue5"]["enabled"].get():
                 send_ue5(t["ue5"]["ip"].get(), t["ue5"]["port"].get(), cmd, self.log)
             if t["warudo"]["enabled"].get():
-                send_warudo(t["warudo"]["ip"].get(), t["warudo"]["port"].get(), cmd, self.log)
+                send_warudo(t["warudo"]["ip"].get(), t["warudo"]["port"].get(), cmd, self.log, take_name)
 
         threading.Thread(target=dispatch, daemon=True).start()
 
