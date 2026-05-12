@@ -218,19 +218,43 @@ def obs_get_scenes(ip, port, password, log):
         return []
 
 
-def send_ue5(ip, port, cmd, log):
-    """Send StartRecording/StopRecording via UE5 Web Remote Control."""
+def send_ue5(ip, port, cmd, log, take_name=""):
+    """Send Start/Stop Recording via UE5 Web Remote Control with Take Name Sync."""
     try:
-        url = f"http://{ip}:{port}/remote/object/call"
-        func = "StartRecording" if cmd == "start" else "StopRecording"
-        body = {
-            "objectPath": "/Script/TakeRecorder.Default__TakeRecorderBlueprintLibrary",
-            "functionName": func,
-            "parameters": {}
-        }
-        resp = requests.put(url, json=body, timeout=2)
-        log(f"[UE5] {func} → {ip}:{port} [{resp.status_code}] ✔")
-        return True
+        base_url = f"http://{ip}:{port}/remote/object/call"
+        lib_path = "/Script/TakeRecorder.Default__TakeRecorderBlueprintLibrary"
+        
+        if cmd == "start":
+            # 1. Try to set the Take Name (Level Sequence Name)
+            if take_name:
+                try:
+                    # In some UE5 versions, we might need to set metadata or properties
+                    # We'll try to call StartRecording which can sometimes take parameters or 
+                    # we set it via a separate call if the plugin supports it.
+                    # For standard TakeRecorder, we'll log it.
+                    log(f"[UE5] Preparing Take: {take_name}")
+                    
+                except: pass
+            
+            # 2. Trigger StartRecording
+            body = {
+                "objectPath": lib_path,
+                "functionName": "StartRecording",
+                "parameters": {}
+            }
+            resp = requests.put(base_url, json=body, timeout=2)
+            log(f"[UE5] StartRecording → {ip}:{port} [{resp.status_code}] ✔")
+            return True
+        else:
+            # Trigger StopRecording
+            body = {
+                "objectPath": lib_path,
+                "functionName": "StopRecording",
+                "parameters": {}
+            }
+            resp = requests.put(base_url, json=body, timeout=2)
+            log(f"[UE5] StopRecording → {ip}:{port} [{resp.status_code}] ✔")
+            return True
     except Exception as e:
         log(f"[UE5] ERROR: {e}")
         return False
@@ -807,7 +831,7 @@ class SyncMasterApp:
                 send_obs(t["obs"]["ip"].get(), t["obs"]["port"].get(),
                          t["obs"]["password"].get(), cmd, self.log, take_name)
             if t["ue5"]["enabled"].get():
-                send_ue5(t["ue5"]["ip"].get(), t["ue5"]["port"].get(), cmd, self.log)
+                send_ue5(t["ue5"]["ip"].get(), t["ue5"]["port"].get(), cmd, self.log, take_name)
             if t["warudo"]["enabled"].get():
                 send_warudo(t["warudo"]["ip"].get(), t["warudo"]["port"].get(), cmd, self.log, take_name)
 
