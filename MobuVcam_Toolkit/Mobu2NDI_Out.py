@@ -152,9 +152,9 @@ def find_video_out_window():
         if length > 0:
             buff = ctypes.create_unicode_buffer(length + 1)
             _user32.GetWindowTextW(hwnd, buff, length + 1)
-            title = buff.value
-            # Search for "Video Out" in title
-            if "Video Out" in title and "MotionBuilder" in title:
+            title = buff.value.lower()
+            # Search for "video out" in title
+            if "video out" in title:
                 rect = _RECT()
                 _user32.GetWindowRect(hwnd, ctypes.byref(rect))
                 result["hwnd"] = hwnd
