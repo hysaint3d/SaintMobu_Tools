@@ -115,6 +115,7 @@ except Exception:
     pass
 
 XBTN_START = 0x0010
+XBTN_BACK  = 0x0020
 XBTN_LB    = 0x0100
 XBTN_RB    = 0x0200
 XBTN_A     = 0x1000
@@ -671,10 +672,9 @@ def _scan_models():
     return sorted(out)
 
 def _cleanup_vcam():
-    for comp in list(FBSystem().Scene.Components):
-        if isinstance(comp, FBModel) and comp.Name in ('SaintVCam', 'SaintVCam_Offset'):
-            try: comp.FBDelete()
-            except: pass
+    """Reset state without necessarily deleting everything in the scene.
+    Actual creation logic handles unique naming if needed.
+    """
     g_state['camera'] = g_state['offset_null'] = g_state['target_model'] = None
     g_state['is_recording'] = False
 
@@ -923,31 +923,39 @@ def OnBrowseSnapClick(c, e):
     if popup.Execute() and 'edit_snap_path' in g_ui:
         g_ui['edit_snap_path'].Text = popup.Path
 
-def _create_shot_marker(shot_num, ts, filename, pos, rot, fov):
-    """Create a Hard Cross scene marker at camera world position with shot metadata."""
+def _create_shot_camera(shot_num, ts, filename, pos, rot, fov):
+    """Create a static FBCamera at the current snapshot position."""
     name = 'VCam_Shot_{:03d}'.format(shot_num)
-    marker = FBModelMarker(name)
-    marker.Show = True
-    marker.Size = 20.0
-    try: marker.Look = FBMarkerLook.kFBMarkerLookHardCross
-    except: pass
-    # Place at camera world position/rotation
-    marker.SetVector(FBVector3d(pos[0], pos[1], pos[2]),
-                     FBModelTransformationType.kModelTranslation, True)
-    marker.SetVector(FBVector3d(rot[0], rot[1], rot[2]),
-                     FBModelTransformationType.kModelRotation, True)
+    
+    # Delete if exists to avoid duplicates
+    for c in FBSystem().Scene.Components:
+        if isinstance(c, FBCamera) and c.Name == name:
+            c.FBDelete(); break
+
+    cam = FBCamera(name)
+    cam.Show = True
+    cam.SetVector(FBVector3d(pos[0], pos[1], pos[2]),
+                      FBModelTransformationType.kModelTranslation, True)
+    cam.SetVector(FBVector3d(rot[0], rot[1], rot[2]),
+                      FBModelTransformationType.kModelRotation, True)
+    cam.FieldOfView = fov
+    
+    # Set HD Res
+    _set_hd_resolution(cam)
+    
     FBSystem().Scene.Evaluate()
+    
     # Add user properties for shot metadata
     try:
-        p_fov = marker.PropertyCreate('FOV_deg',   FBPropertyType.kFBPT_double, 'Number', False, True, None)
-        p_ts  = marker.PropertyCreate('Timestamp', FBPropertyType.kFBPT_charptr,'String', False, True, None)
-        p_fn  = marker.PropertyCreate('Filename',  FBPropertyType.kFBPT_charptr,'String', False, True, None)
+        p_fov = cam.PropertyCreate('FOV_deg',   FBPropertyType.kFBPT_double, 'Number', False, True, None)
+        p_ts  = cam.PropertyCreate('Timestamp', FBPropertyType.kFBPT_charptr,'String', False, True, None)
+        p_fn  = cam.PropertyCreate('Filename',  FBPropertyType.kFBPT_charptr,'String', False, True, None)
         if p_fov: p_fov.Data = float(fov)
         if p_ts:  p_ts.Data  = str(ts)
         if p_fn:  p_fn.Data  = str(filename)
     except Exception as ex:
-        print('VCam Marker property error:', ex)
-    return marker
+        print('VCam Shot Camera property error:', ex)
+    return cam
 
 def OnSnapshotClick(c, e):
     save_dir = g_ui['edit_snap_path'].Text.strip() if 'edit_snap_path' in g_ui else os.path.expanduser('~')
@@ -988,10 +996,10 @@ def OnSnapshotClick(c, e):
             fov = round(float(cam.FieldOfView), 2)
         except: pass
 
-    # ③ Scene marker at camera position
+    # ③ Create Shot Camera at current position
     g_state['shot_count'] += 1
     shot_num = g_state['shot_count']
-    _create_shot_marker(shot_num, ts, fn, pos, rot, fov)
+    _create_shot_camera(shot_num, ts, fn, pos, rot, fov)
 
     # ④ Append to JSONL log file
     log_path = os.path.join(save_dir, 'VCam_Shots.jsonl')
@@ -1284,16 +1292,38 @@ def OnUIIdle(c, e):
     if pressed & XBTN_RIGHT:
         player.StepForward()
 
-    # LB/RB -> Jump to Start/End
-    if pressed & XBTN_LB:
+    # Back -> Jump to Start
+    if pressed & XBTN_BACK:
         player.GotoStart()
         _update_status('Jumped to Start.')
+
+    # LB -> Cycle Scene Cameras
+    if pressed & XBTN_LB:
+        cams = [c for c in FBSystem().Scene.Components if isinstance(c, FBCamera)]
+        if cams:
+            renderer = FBSystem().Scene.Renderer
+            cur_cam = renderer.GetCameraInPane(0)
+            idx = 0
+            try:
+                for i, c in enumerate(cams):
+                    if c.Name == cur_cam.Name:
+                        idx = i; break
+            except: pass
+            next_idx = (idx + 1) % len(cams)
+            next_cam = cams[next_idx]
+            renderer.SetCameraInPane(next_cam, 0)
+            _update_status('View: ' + next_cam.Name)
+
+    # RB -> Return to managed VCam
     if pressed & XBTN_RB:
-        try:
-            player.GotoEnd()
-            _update_status('Jumped to End.')
-        except:
-            pass
+        cam = g_state.get('camera')
+        if cam:
+            try:
+                FBSystem().Scene.Renderer.SetCameraInPane(cam, 0)
+                _update_status('View: Returned to VCam.')
+            except: pass
+        else:
+            _update_status('Error: No active VCam to return to.')
 
     # X/Y -> Previous/Next Take
     if pressed & (XBTN_X | XBTN_Y):
@@ -1326,8 +1356,7 @@ def PopulateTool(tool):
     
     tab_panel = FBTabPanel()
     tab_panel.Items.append('VCam')
-    tab_panel.Items.append('OSC Source')
-    tab_panel.Items.append('OpenVR Source')
+    tab_panel.Items.append('Device')
     tool.SetControl('tab', tab_panel)
     
     y_status_h = FBAddRegionParam(30, FBAttachType.kFBAttachNone, '')
@@ -1338,15 +1367,13 @@ def PopulateTool(tool):
     h_content_end = FBAddRegionParam(0, FBAttachType.kFBAttachTop, 'status')
     tool.AddRegion('content', 'content', x, y_content_start, w, h_content_end)
 
-    view_osc = FBVBoxLayout()
-    view_ovr = FBVBoxLayout()
-    view_vcam = FBVBoxLayout()
+    view_device = FBVBoxLayout()
+    view_vcam   = FBVBoxLayout()
     tool.SetControl('content', view_vcam)
     
     def OnTabChange(c, e):
         if c.ItemIndex == 0: tool.SetControl('content', view_vcam)
-        elif c.ItemIndex == 1: tool.SetControl('content', view_osc)
-        else: tool.SetControl('content', view_ovr)
+        else: tool.SetControl('content', view_device)
         
     tab_panel.OnChange.Add(OnTabChange)
 
@@ -1512,15 +1539,20 @@ def PopulateTool(tool):
     tool.SetControl('status', g_ui['lbl_status'])
 
     # ── Assemble layouts
-    view_osc.Add(lyt_osc_ip,                         30)
-    view_osc.Add(lyt_osc_top,                        35)
-    view_osc.Add(g_ui['btn_create_osc_rb'],          35)
-    view_osc.Add(g_ui['btn_reset_osc_data'],         35)
-
-    view_ovr.Add(lyt_ovr,                            35)
-    view_ovr.Add(lyt_ovr_ctrl,                       35)
-    view_ovr.Add(g_ui['btn_create_ovr_rb'],          35)
-    view_ovr.Add(g_ui['btn_reset_ovr_data'],         35)
+    # Device Tab (OSC + OpenVR)
+    view_device.Add(hdr('OSC SOURCE (iPhone)'),          25)
+    view_device.Add(lyt_osc_ip,                         30)
+    view_device.Add(lyt_osc_top,                        35)
+    view_device.Add(g_ui['btn_create_osc_rb'],          35)
+    view_device.Add(g_ui['btn_reset_osc_data'],         35)
+    
+    view_device.Add(FBLabel(),                          15) # Spacer
+    
+    view_device.Add(hdr('OPENVR SOURCE (SteamVR)'),      25)
+    view_device.Add(lyt_ovr,                            35)
+    view_device.Add(lyt_ovr_ctrl,                       35)
+    view_device.Add(g_ui['btn_create_ovr_rb'],          35)
+    view_device.Add(g_ui['btn_reset_ovr_data'],         35)
 
     view_vcam.Add(hdr('RIGID BODY SOURCE'),           25)
     view_vcam.Add(lyt_src,                            32)

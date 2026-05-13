@@ -645,10 +645,10 @@ def PopulateTool(tool):
         status("Please select an optical marker (point).")
 
     # --- ACTOR TAB ---
-    lyt_actor.Add(lbl("1. Import Optical Data"), 20)
+    lyt_actor.Add(lbl("Import Optical Data"), 20)
     lyt_actor.Add(btn("Import Optical Data", OnImportClick), 35)
     
-    lyt_actor.Add(lbl("2. Target Character Prefix"), 20)
+    lyt_actor.Add(lbl("Target Character Prefix"), 20)
     
     lyt_pre = FBHBoxLayout()
     lyt_pre.Add(lbl("Prefix:"), 60)
@@ -659,7 +659,7 @@ def PopulateTool(tool):
     lyt_pre.Add(btn_get_prefix, 80)
     lyt_actor.Add(lyt_pre, 25)
     
-    lyt_actor.Add(lbl("3. Template Selection"), 20)
+    lyt_actor.Add(lbl("Template Selection"), 20)
     lyt_temp = FBHBoxLayout(); lyt_temp.Add(lbl("Template:"), 60)
     g_ui["list_template"] = FBList()
     
@@ -673,12 +673,12 @@ def PopulateTool(tool):
         
     lyt_temp.Add(g_ui["list_template"], 140); lyt_actor.Add(lyt_temp, 25)
     
-    lyt_actor.Add(lbl("4. Rigid Bodies & Actor"), 20)
+    lyt_actor.Add(lbl("Rigid Bodies & Actor"), 20)
     
     lyt_actor.Add(btn("Create Rigid Bodies", OnCreateRigidClick), 35)
     lyt_actor.Add(btn("Create & Fit Actor", OnCreateAndFitClick), 45)
     
-    lyt_actor.Add(lbl("3. Auto-Mapping"), 20)
+    lyt_actor.Add(lbl("Auto-Mapping"), 20)
     lyt_actor.Add(btn("Auto-Map MarkerSet", OnAutoMapClick), 40)
     lyt_actor.Add(btn("Activate Mapping", OnActivateClick), 40)
     
@@ -688,10 +688,10 @@ def PopulateTool(tool):
     g_ui["lbl_status"] = FBLabel(); g_ui["lbl_status"].Caption = "Status: Ready."; lyt_actor.Add(g_ui["lbl_status"], 30)
 
     # --- LABELING TAB ---
-    lyt_labeling.Add(lbl("1. Manual Labeling"), 20)
+    lyt_labeling.Add(lbl("Manual Labeling"), 20)
     lyt_labeling.Add(lbl("(Manual Labeling in Viewer)"), 15)
     
-    lyt_labeling.Add(lbl("2. Swap Analysis"), 20)
+    lyt_labeling.Add(lbl("Swap Analysis"), 20)
     lyt_labeling.Add(btn("Analyze Rigid Stability", OnAnalyzeSwapsClick), 35)
     lyt_labeling.Add(lbl("請選取 RigidBody 或兩顆以上光點"), 15)
     
@@ -714,7 +714,7 @@ def PopulateTool(tool):
     lyt_labeling.Add(g_ui["list_swaps"], 120)
 
     # --- DATACLEAN TAB ---
-    lyt_dataclean.Add(lbl("1. Filter"), 20)
+    lyt_dataclean.Add(lbl("Filter"), 20)
     lyt_dataclean.Add(btn("Set PostProcess", OnSetPostProcessClick), 35)
     lyt_dataclean.Add(lbl("轉換為動態曲線 (Set Done)"), 15)
     
@@ -727,7 +727,7 @@ def PopulateTool(tool):
     lyt_dataclean.Add(btn("Smooth", OnSmoothClick), 35)
     lyt_dataclean.Add(lbl("平滑曲線，平順降低動態"), 15)
 
-    lyt_dataclean.Add(lbl("2. Data Cleanup"), 20)
+    lyt_dataclean.Add(lbl("Data Cleanup"), 20)
     lyt_dataclean.Add(btn("Delete Unlabeled Markers", OnDeleteUnlabeledClick), 35)
 def CreateTool():
     t = FBCreateUniqueTool("MobuOptical_Toolkit")

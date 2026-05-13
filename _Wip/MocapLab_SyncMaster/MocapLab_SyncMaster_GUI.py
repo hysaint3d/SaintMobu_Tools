@@ -110,8 +110,8 @@ def send_mobu(ip, port, cmd, log, take_name=""):
         log(f"[Mobu] ERROR: {e}")
 
 
-def send_motive(ip, port, cmd, version, log, take_name=""):
-    """Send XML Remote Trigger AND NatNet Command to Optitrack Motive."""
+def send_motive(ip, port, cmd, log, take_name=""):
+    """Send XML Remote Trigger AND NatNet Command to Optitrack Motive (2.x & 3.x)."""
     try:
         # 1. Prepare XML Payload (Legacy/Port 1512)
         # Use single-line format, standard for Motive 3.x XML triggering
@@ -162,9 +162,8 @@ def send_motive(ip, port, cmd, version, log, take_name=""):
 
         sock.close()
         
-        log(f"[Motive] Dual-Trigger ({cmd}) → {ip}:{port} & {ip}:{cmd_port} ✔")
-        if version == "3.x":
-             log("[Motive] Info: Sent both XML (1512) and NatNet Command (1510).")
+        log(f"[Motive] Dual-Trigger ({cmd}) → {ip}:{port} & {ip}:1510 ✔")
+        log("[Motive] Info: Sent XML (1512) and NatNet Command (1510) for 2.x/3.x compatibility.")
     except Exception as e:
         log(f"[Motive] ERROR: {e}")
 
@@ -655,11 +654,7 @@ class SyncMasterApp:
         row.pack(fill=tk.X, pady=2)
 
         var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(row, text="Motive", variable=var, width=9).pack(side=tk.LEFT)
-
-        ver_var = tk.StringVar(value="2.x")
-        ttk.Combobox(row, textvariable=ver_var, values=["2.x", "3.x"],
-                     state="readonly", width=3).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Checkbutton(row, text="Motive (2.x/3.x)", variable=var, width=16).pack(side=tk.LEFT)
 
         ttk.Label(row, text=" IP:", width=3).pack(side=tk.LEFT)
         ip_var = tk.StringVar(value="127.0.0.1")
@@ -674,7 +669,7 @@ class SyncMasterApp:
         light.pack(side=tk.LEFT, padx=6)
         light.create_oval(2, 2, 10, 10, fill="#333333", outline="", tags="circle")
 
-        self.targets["motive"] = {"enabled": var, "ip": ip_var, "port": port_var, "version": ver_var, "light": light}
+        self.targets["motive"] = {"enabled": var, "ip": ip_var, "port": port_var, "light": light}
 
     def _add_obs(self, parent):
         row1 = ttk.Frame(parent)
@@ -737,8 +732,6 @@ class SyncMasterApp:
                         t["ip"].set(cfg[key].get("ip", t["ip"].get()))
                         t["port"].set(cfg[key].get("port", t["port"].get()))
                         t["enabled"].set(cfg[key].get("enabled", True))
-                        if key == "motive" and "version" in cfg[key]:
-                            t["version"].set(cfg[key]["version"])
                         if key == "obs":
                             if "password" in cfg[key]:
                                 t["password"].set(cfg[key]["password"])
@@ -756,8 +749,6 @@ class SyncMasterApp:
             for key, t in self.targets.items():
                 entry = {"ip": t["ip"].get(), "port": t["port"].get(),
                          "enabled": t["enabled"].get()}
-                if key == "motive":
-                    entry["version"] = t["version"].get()
                 if key == "obs":
                     entry["password"] = t["password"].get()
                     entry["scene"] = t["scene"].get()
@@ -826,7 +817,7 @@ class SyncMasterApp:
                           cmd, self.log, take_name)  # pass take name
             if t["motive"]["enabled"].get():
                 send_motive(t["motive"]["ip"].get(), t["motive"]["port"].get(),
-                            cmd, t["motive"]["version"].get(), self.log, take_name)
+                            cmd, self.log, take_name)
             if t["obs"]["enabled"].get():
                 send_obs(t["obs"]["ip"].get(), t["obs"]["port"].get(),
                          t["obs"]["password"].get(), cmd, self.log, take_name)
