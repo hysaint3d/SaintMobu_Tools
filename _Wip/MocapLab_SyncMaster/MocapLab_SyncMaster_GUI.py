@@ -666,7 +666,7 @@ WEB_UI_HTML = """<!DOCTYPE html>
 
   function poll() {
     if (!serverBase) return;
-    fetch(serverBase + '/status', { signal: AbortSignal.timeout(2000) })
+    fetch(serverBase + '/status')
       .then(r => r.json())
       .then(d => {
         if (!isConnected) { 
@@ -702,8 +702,15 @@ WEB_UI_HTML = """<!DOCTYPE html>
           });
         }
       })
-      .catch(() => {
-        if (isConnected) { addLog('Lost connection to SyncMaster.', 'err'); setConnected(false); }
+      .catch((e) => {
+        if (isConnected) { 
+          addLog('Lost connection to SyncMaster.', 'err'); 
+          setConnected(false); 
+        } else {
+          if (polling) {
+            addLog('Connection failed. Retrying...', 'err');
+          }
+        }
       });
   }
 

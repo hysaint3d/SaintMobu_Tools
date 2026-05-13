@@ -384,7 +384,7 @@
 
   function poll() {
     if (!serverBase) return;
-    fetch(serverBase + '/status', { signal: AbortSignal.timeout(2000) })
+    fetch(serverBase + '/status')
       .then(r => r.json())
       .then(d => {
         if (!isConnected) { 
@@ -425,8 +425,16 @@
           });
         }
       })
-      .catch(() => {
-        if (isConnected) { addLog('Lost connection to SyncMaster.', 'err'); setConnected(false); }
+      .catch((e) => {
+        if (isConnected) { 
+          addLog('Lost connection to SyncMaster.', 'err'); 
+          setConnected(false); 
+        } else {
+          // Initial connection failure feedback
+          if (polling) {
+            addLog('Connection failed. Retrying...', 'err');
+          }
+        }
       });
   }
 
