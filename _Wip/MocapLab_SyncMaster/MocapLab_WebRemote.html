@@ -19,6 +19,7 @@
     --red-dim:    #7b1c1a;
     --green:      #43a047;
     --accent:     #7c4dff;
+    --obs:        #e65100;
     --timer-idle: #444466;
     --timer-rec:  #ff4444;
   }
@@ -34,8 +35,7 @@
     display: flex; flex-direction: column;
     align-items: center; justify-content: flex-start;
     min-height: 100dvh;
-    padding: 0 16px 40px;
-    gap: 0;
+    padding: 0 16px 48px;
   }
 
   /* ── Header ── */
@@ -56,8 +56,8 @@
     transition: background 0.4s;
     box-shadow: 0 0 6px transparent;
   }
-  #dot-status.connected   { background: var(--green); box-shadow: 0 0 10px var(--green); }
-  #dot-status.recording   { background: var(--red);   box-shadow: 0 0 14px var(--red); animation: pulse 1s infinite; }
+  #dot-status.connected { background: var(--green); box-shadow: 0 0 10px var(--green); }
+  #dot-status.recording { background: var(--red); box-shadow: 0 0 14px var(--red); animation: pulse 1s infinite; }
 
   @keyframes pulse {
     0%, 100% { opacity: 1; }
@@ -85,7 +85,6 @@
     color: var(--timer-idle);
     transition: color 0.4s, text-shadow 0.4s;
     line-height: 1;
-    tab-size: 4;
   }
   #timer.recording {
     color: var(--timer-rec);
@@ -104,6 +103,30 @@
     text-align: center; word-break: break-all;
     min-height: 1.2em;
   }
+
+  /* ── Targets Health ── */
+  .targets-block {
+    display: flex; justify-content: space-around;
+    padding: 12px 10px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 14px;
+    gap: 8px;
+  }
+  .target-item {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    flex: 1;
+  }
+  .target-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #333; transition: all 0.3s;
+  }
+  .target-label {
+    font-size: 0.6rem; font-weight: 700; color: var(--muted);
+    letter-spacing: 1px; text-transform: uppercase;
+  }
+  .dot-green  { background: var(--green); box-shadow: 0 0 10px var(--green); }
+  .dot-red    { background: var(--red);   box-shadow: 0 0 10px var(--red); }
+  .dot-yellow { background: #fbc02d;      box-shadow: 0 0 10px #fbc02d; }
+  .dot-gray   { background: #333;         box-shadow: none; }
 
   /* ── Take Name Input ── */
   .input-group {
@@ -146,7 +169,7 @@
   }
   #btn-connect-server:hover { opacity: 0.85; }
 
-  /* ── Buttons ── */
+  /* ── Record Buttons ── */
   .btn-row {
     display: flex; gap: 12px;
   }
@@ -175,50 +198,65 @@
   #btn-stop:hover { background: #1e1e28; color: var(--text); }
   #btn-stop:disabled { opacity: 0.3; cursor: not-allowed; }
 
-  /* ── Targets Health ── */
-  .targets-block {
-    display: flex; justify-content: space-around;
-    padding: 12px 10px; background: var(--surface);
-    border: 1px solid var(--border); border-radius: 14px;
-    gap: 8px;
-  }
-  .target-item {
-    display: flex; flex-direction: column; align-items: center; gap: 6px;
-    flex: 1;
-  }
-  .target-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: #333; transition: all 0.3s;
-  }
-  .target-label {
-    font-size: 0.6rem; font-weight: 700; color: var(--muted);
-    letter-spacing: 1px; text-transform: uppercase;
-  }
-  .dot-green  { background: var(--green); box-shadow: 0 0 10px var(--green); }
-  .dot-red    { background: var(--red);   box-shadow: 0 0 10px var(--red); }
-  .dot-yellow { background: #fbc02d;     box-shadow: 0 0 10px #fbc02d; }
-  .dot-gray   { background: #333;        box-shadow: none; }
-
-  /* ── Video Ctrl ── */
+  /* ── OBS Scene Buttons ── */
   .video-ctrl-block {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: 16px; padding: 16px;
-    display: flex; flex-direction: column; gap: 12px;
+    display: flex; flex-direction: column; gap: 14px;
   }
-  .video-ctrl-block h2 {
+  .obs-header {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .obs-header h2 {
     font-size: 0.75rem; font-weight: 600; letter-spacing: 2px;
     text-transform: uppercase; color: var(--muted);
   }
-  .obs-row { display: flex; gap: 8px; }
-  #obs-scene-list {
-    flex: 1; background: var(--bg); border: 1px solid var(--border);
-    color: var(--text); border-radius: 10px; padding: 8px 12px;
-    font-size: 0.9rem; outline: none;
+  #btn-refresh-scenes {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); border-radius: 8px;
+    padding: 4px 10px; font-size: 0.75rem; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; gap: 4px;
   }
-  #btn-switch-scene {
-    background: var(--surface); border: 1px solid var(--border);
-    color: var(--text); border-radius: 10px; padding: 8px 16px;
-    font-size: 0.85rem; font-weight: 600; cursor: pointer;
+  #btn-refresh-scenes:hover { border-color: var(--accent); color: var(--accent); }
+  #btn-refresh-scenes.spinning svg {
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #scene-btn-grid {
+    display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  #scene-btn-grid .scene-empty {
+    font-size: 0.8rem; color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    padding: 4px 0;
+  }
+  .scene-btn {
+    padding: 10px 16px;
+    background: #1a1a24;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    -webkit-tap-highlight-color: transparent;
+    white-space: nowrap;
+  }
+  .scene-btn:hover {
+    background: #22223a;
+    border-color: var(--accent);
+    color: white;
+  }
+  .scene-btn:active { transform: scale(0.95); }
+  .scene-btn.active {
+    background: var(--obs);
+    border-color: var(--obs);
+    color: white;
+    box-shadow: 0 0 14px rgba(230, 81, 0, 0.4);
+    font-weight: 700;
   }
 
   /* ── Status Log ── */
@@ -306,20 +344,26 @@
     <input id="take-name" type="text" placeholder="e.g. Scene01_A" autocomplete="off" autocorrect="off">
   </div>
 
-  <!-- Buttons -->
+  <!-- Record Buttons -->
   <div class="btn-row">
     <button class="btn" id="btn-start" onclick="sendCmd('start')" disabled>⏺ START</button>
     <button class="btn" id="btn-stop"  onclick="sendCmd('stop')"  disabled>⏹ STOP</button>
   </div>
 
-  <!-- Video Ctrl -->
+  <!-- OBS Scene Buttons -->
   <div class="video-ctrl-block">
-    <h2>Video Control (OBS)</h2>
-    <div class="obs-row">
-      <select id="obs-scene-list">
-        <option value="">— No Scenes —</option>
-      </select>
-      <button id="btn-switch-scene" onclick="switchScene()">Switch</button>
+    <div class="obs-header">
+      <h2>🎥 OBS Scene Switch</h2>
+      <button id="btn-refresh-scenes" onclick="refreshScenes()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+        </svg>
+        Refresh
+      </button>
+    </div>
+    <div id="scene-btn-grid">
+      <span class="scene-empty">— Connect to load scenes —</span>
     </div>
   </div>
 
@@ -333,22 +377,22 @@
 <footer>Mocap Lab × Antigravity &nbsp;|&nbsp; SaintMobu Tools</footer>
 
 <script>
-  let serverBase = '';
-  let polling = null;
-  let isConnected = false;
+  let serverBase   = '';
+  let polling      = null;
+  let isConnected  = false;
   let sceneFetched = false;
+  let activeScene  = '';
 
   function pad(n) { return String(Math.floor(n)).padStart(2, '0'); }
-
   function fmtSec(s) {
     return pad(s / 3600) + ':' + pad((s % 3600) / 60) + ':' + pad(s % 60);
   }
 
   function addLog(msg, type = '') {
-    const el = document.getElementById('log-area');
-    const ts = new Date().toLocaleTimeString('en', {hour12: false});
+    const el  = document.getElementById('log-area');
+    const ts  = new Date().toLocaleTimeString('en', { hour12: false });
     const div = document.createElement('div');
-    div.className = 'log-entry ' + type;
+    div.className   = 'log-entry ' + type;
     div.textContent = '[' + ts + '] ' + msg;
     el.appendChild(div);
     el.scrollTop = el.scrollHeight;
@@ -361,12 +405,14 @@
     if (ok) {
       dot.className = 'connected';
       document.getElementById('btn-start').disabled = false;
-      document.getElementById('btn-stop').disabled = false;
+      document.getElementById('btn-stop').disabled  = false;
     } else {
       dot.className = '';
       document.getElementById('btn-start').disabled = true;
-      document.getElementById('btn-stop').disabled = true;
+      document.getElementById('btn-stop').disabled  = true;
       sceneFetched = false;
+      document.getElementById('scene-btn-grid').innerHTML =
+        '<span class="scene-empty">— Disconnected —</span>';
     }
   }
 
@@ -375,8 +421,7 @@
     if (!addr) { addLog('Please enter a server address.', 'err'); return; }
     if (!addr.startsWith('http')) addr = 'http://' + addr;
     serverBase = addr.replace(/\/$/, '');
-    addLog('Connecting to ' + serverBase + ' ...');
-
+    addLog('Connecting to ' + serverBase + ' …');
     if (polling) clearInterval(polling);
     poll();
     polling = setInterval(poll, 1000);
@@ -387,37 +432,36 @@
     fetch(serverBase + '/status')
       .then(r => r.json())
       .then(d => {
-        if (!isConnected) { 
-          addLog('Connected to SyncMaster.', 'ok'); 
-          setConnected(true); 
+        if (!isConnected) {
+          addLog('Connected to SyncMaster.', 'ok');
+          setConnected(true);
           fetchScenes();
         }
 
-        const timer = document.getElementById('timer');
-        const recLabel = document.getElementById('rec-label');
+        const timer      = document.getElementById('timer');
+        const recLabel   = document.getElementById('rec-label');
         const takeDisplay = document.getElementById('take-display');
-        const dot = document.getElementById('dot-status');
-        const btnStart = document.getElementById('btn-start');
+        const dot        = document.getElementById('dot-status');
+        const btnStart   = document.getElementById('btn-start');
 
         timer.textContent = fmtSec(d.elapsed || 0);
 
         if (d.recording) {
-          timer.className = 'recording';
-          recLabel.className = 'recording';
+          timer.className      = 'recording';
+          recLabel.className   = 'recording';
           recLabel.textContent = '⏺ Recording';
-          dot.className = 'recording';
+          dot.className        = 'recording';
           takeDisplay.textContent = d.take_name || '';
-          btnStart.disabled = true;
+          btnStart.disabled    = true;
         } else {
-          timer.className = '';
-          recLabel.className = '';
+          timer.className      = '';
+          recLabel.className   = '';
           recLabel.textContent = 'Idle';
-          dot.className = 'connected';
+          dot.className        = 'connected';
           takeDisplay.textContent = '';
-          btnStart.disabled = false;
+          btnStart.disabled    = false;
         }
 
-        // Update Target Health Dots
         if (d.targets) {
           Object.keys(d.targets).forEach(key => {
             const el = document.getElementById('dot-' + key);
@@ -425,49 +469,89 @@
           });
         }
       })
-      .catch((e) => {
-        if (isConnected) { 
-          addLog('Lost connection to SyncMaster.', 'err'); 
-          setConnected(false); 
-        } else {
-          // Initial connection failure feedback
-          if (polling) {
-            addLog('Connection failed. Retrying...', 'err');
-          }
+      .catch(() => {
+        if (isConnected) {
+          addLog('Lost connection to SyncMaster.', 'err');
+          setConnected(false);
         }
       });
   }
 
+  /* ── OBS Scene Fetching ── */
+
   function fetchScenes() {
-    if (!serverBase || sceneFetched) return;
+    if (!serverBase) return;
+    const grid = document.getElementById('scene-btn-grid');
+    grid.innerHTML = '<span class="scene-empty">Loading scenes…</span>';
+
+    addLog('Fetching OBS scenes from ' + serverBase + '/obs_scenes …');
+
     fetch(serverBase + '/obs_scenes')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + r.statusText);
+        return r.json();
+      })
       .then(scenes => {
-        const sel = document.getElementById('obs-scene-list');
-        sel.innerHTML = '';
+        grid.innerHTML = '';
+
         if (!scenes || scenes.length === 0) {
-          sel.innerHTML = '<option value="">— No Scenes —</option>';
+          grid.innerHTML = '<span class="scene-empty">— No scenes found. Is OBS connected? —</span>';
+          addLog('OBS: no scenes returned. Check OBS WebSocket settings.', 'err');
           return;
         }
+
         scenes.forEach(s => {
-          const opt = document.createElement('option');
-          opt.value = s; opt.textContent = s;
-          sel.appendChild(opt);
+          const btn = document.createElement('button');
+          btn.className   = 'scene-btn' + (s === activeScene ? ' active' : '');
+          btn.textContent = s;
+          btn.onclick     = () => switchScene(s, btn);
+          grid.appendChild(btn);
         });
+
         sceneFetched = true;
-        addLog('OBS Scenes loaded.', 'ok');
-      }).catch(() => {});
+        addLog('OBS: ' + scenes.length + ' scenes loaded.', 'ok');
+      })
+      .catch(e => {
+        grid.innerHTML = '<span class="scene-empty">— Failed to load scenes —</span>';
+        addLog('OBS scenes fetch failed: ' + e.message, 'err');
+      });
   }
 
-  function switchScene() {
-    const scene = document.getElementById('obs-scene-list').value;
-    if (!scene) return;
+  function refreshScenes() {
+    sceneFetched = false;
+    const btn = document.getElementById('btn-refresh-scenes');
+    btn.classList.add('spinning');
+    setTimeout(() => btn.classList.remove('spinning'), 800);
+    fetchScenes();
+  }
+
+  function switchScene(sceneName, btnEl) {
+    if (!serverBase || !sceneName) return;
+
+    // Optimistic UI update
+    document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    activeScene = sceneName;
+
     fetch(serverBase + '/switch_scene', {
       method: 'POST',
-      body: JSON.stringify({ scene })
-    }).then(() => addLog('OBS: Switched to ' + scene, 'ok'))
-      .catch(e => addLog('Switch failed: ' + e.message, 'err'));
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scene: sceneName })
+    })
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(() => addLog('OBS: switched to "' + sceneName + '"', 'ok'))
+      .catch(e => {
+        addLog('OBS switch failed: ' + e.message, 'err');
+        // Revert active state on failure
+        document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+        activeScene = '';
+      });
   }
+
+  /* ── Record Commands ── */
 
   function sendCmd(action) {
     if (!serverBase) { addLog('Not connected to server.', 'err'); return; }
@@ -476,8 +560,7 @@
     fetch(serverBase + '/record', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, take_name: takeName }),
-      signal: AbortSignal.timeout(3000)
+      body: JSON.stringify({ action, take_name: takeName })
     })
     .then(r => r.json())
     .then(() => {
@@ -488,12 +571,17 @@
     });
   }
 
+  /* ── Auto Connect on Load ── */
+
   window.addEventListener('load', () => {
-    const host = location.hostname;
-    const port = location.port;
-    if (host && host !== 'localhost' && host !== '127.0.0.1') {
-      document.getElementById('server-addr').value = host + ':' + (port || '5000');
+    const protocol = location.protocol;
+    if (protocol.startsWith('http')) {
+      // Auto-fill and auto-connect when served via Flask
+      document.getElementById('server-addr').value =
+        location.hostname + ':' + (location.port || '5000');
+      connectServer();
     } else {
+      // Fallback for local file access
       document.getElementById('server-addr').value = '127.0.0.1:5000';
     }
   });

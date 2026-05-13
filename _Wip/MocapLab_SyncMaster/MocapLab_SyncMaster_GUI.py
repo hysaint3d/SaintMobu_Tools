@@ -755,19 +755,14 @@ WEB_UI_HTML = """<!DOCTYPE html>
     });
   }
 
-  function pad(n) { return String(n).padStart(2, '0'); }
-
-  function poll() {
-    fetch('/status').then(r => r.json()).then(d => {
-      const el = document.getElementById('timer');
-      const s = d.elapsed;
-      el.textContent = pad(Math.floor(s/3600)) + ':' + pad(Math.floor(s/60)%60) + ':' + pad(s%60);
-      el.className = d.recording ? 'recording' : '';
-      document.getElementById('status').textContent = d.recording ? '⏺ Recording: ' + d.take_name : 'Idle';
-    }).catch(() => {});
-  }
-  setInterval(poll, 1000);
-  poll();
+  window.addEventListener('load', () => {
+    if (location.protocol.startsWith('http')) {
+      serverBase = location.origin;
+      connectServer();
+    } else {
+      document.getElementById('server-addr').value = '127.0.0.1:5000';
+    }
+  });
 </script>
 </body>
 </html>
@@ -869,7 +864,7 @@ class SyncMasterApp:
             ip = self.targets["obs"]["ip"].get()
             port = self.targets["obs"]["port"].get()
             pw = self.targets["obs"]["password"].get()
-            scenes = get_obs_scene_list(ip, port, pw, self.log)
+            scenes = obs_get_scenes(ip, port, pw, self.log)
             return jsonify(scenes)
 
         @app.route("/switch_scene", methods=["POST", "OPTIONS"])
