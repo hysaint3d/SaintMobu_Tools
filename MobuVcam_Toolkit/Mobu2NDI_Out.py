@@ -137,6 +137,34 @@ def _gdi_capture(x, y, w, h):
     _user32.ReleaseDC(None, hdc_screen)
     return buf
 
+# ── Win32 Window Helpers ──────────────────────────────────────────────────────
+_WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+class _RECT(ctypes.Structure):
+    _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long), ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+
+def find_video_out_window():
+    """Search for the MotionBuilder Video Output window and return its rect."""
+    result = {"hwnd": None, "rect": None}
+    
+    def callback(hwnd, lparam):
+        length = _user32.GetWindowTextLengthW(hwnd)
+        if length > 0:
+            buff = ctypes.create_unicode_buffer(length + 1)
+            _user32.GetWindowTextW(hwnd, buff, length + 1)
+            title = buff.value
+            # Search for "Video Out" in title
+            if "Video Out" in title and "MotionBuilder" in title:
+                rect = _RECT()
+                _user32.GetWindowRect(hwnd, ctypes.byref(rect))
+                result["hwnd"] = hwnd
+                result["rect"] = rect
+                return False # Stop enumeration
+        return True
+
+    _user32.EnumWindows(_WNDENUMPROC(callback), 0)
+    return result
+
 # ── Global State & Cleanup ───────────────────────────────────────────────────
 if not hasattr(sys, "mocaplab_ndi_state"):
     sys.mocaplab_ndi_state = {
@@ -335,6 +363,20 @@ def OnSetCameraClick(control, event):
     except Exception as e:
         print("[NDI] SetCameraInPane error: {}".format(e))
 
+def OnDetectVideoOut(control, event):
+    res = find_video_out_window()
+    if res["rect"]:
+        r = res["rect"]
+        w = r.right - r.left
+        h = r.bottom - r.top
+        g_ui["edit_x"].Text = str(r.left)
+        g_ui["edit_y"].Text = str(r.top)
+        g_ui["edit_w"].Text = str(w)
+        g_ui["edit_h"].Text = str(h)
+        print("[NDI] Detected Video Out at: {},{} ({}x{})".format(r.left, r.top, w, h))
+    else:
+        FBMessageBox("NDI Out", "Could not find 'Video Out' window.\nMake sure Video Output device is enabled in Mobu.", "OK")
+
 # ── UI Layout ─────────────────────────────────────────────────────────────────
 def OnToggleClick(control, event):
     if not g_state["is_streaming"]:
@@ -431,6 +473,10 @@ def PopulateTool(tool):
     g_ui["edit_h"] = FBEdit(); g_ui["edit_h"].Text = str(g_state["cap_h"])
     lyt_wh.Add(g_ui["edit_h"], 55)
     layout.Add(lyt_wh, 30)
+
+    btn_detect = FBButton(); btn_detect.Caption = "Auto-Detect Video Out Window"
+    btn_detect.OnClick.Add(OnDetectVideoOut)
+    layout.Add(btn_detect, 35)
 
     # ── Control ─────────────────────────────────────────────────────
     layout.Add(hdr("Stream Control"), 22)
