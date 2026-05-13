@@ -1113,6 +1113,29 @@ def OnUIIdle(c, e):
 
     global _prev_btn
 
+    # ── NDI frame send (merged into VCam idle) ──────────────────────────────────
+    if g_state.get('ndi_streaming') and g_state.get('ndi_instance'):
+        _now = time.time()
+        if _now - g_state['ndi_last_time'] >= 1.0 / max(1, g_state['ndi_fps']):
+            g_state['ndi_last_time'] = _now
+            try:
+                _x = g_state['ndi_cap_x']; _y = g_state['ndi_cap_y']
+                _w = g_state['ndi_cap_w']; _h = g_state['ndi_cap_h']
+                _buf = _gdi_capture(_x, _y, _w, _h)
+                _vf = NDIlib_video_frame_v2_t()
+                _vf.xres = _w; _vf.yres = _h
+                _vf.FourCC = NDIlib_FourCC_type_BGRX
+                _vf.frame_rate_N = g_state['ndi_fps']; _vf.frame_rate_D = 1
+                _vf.picture_aspect_ratio = float(_w) / float(_h)
+                _vf.frame_format_type = 0; _vf.timecode = 0
+                _vf.p_data = ctypes.cast(_buf, ctypes.c_void_p).value
+                _vf.line_stride_in_bytes = _w * 4
+                _vf.p_metadata = None; _vf.timestamp = 0
+                _ndi_loader.lib.NDIlib_send_send_video_v2(
+                    ctypes.c_void_p(g_state['ndi_instance']), ctypes.byref(_vf))
+            except Exception as _e:
+                pass
+
     # ── OSC polling ────────────────────────────────────────────────────────────
     if g_state['osc_listening'] and g_state.get('osc_socket'):
         _poll_osc()
@@ -1403,28 +1426,6 @@ def OnUIIdle(c, e):
             FBSystem().CurrentTake = takes[idx + 1]
             _update_status('Take: ' + takes[idx + 1].Name)
 
-    # ── NDI frame send (merged into VCam idle) ──────────────────────────────────
-    if g_state.get('ndi_streaming') and g_state.get('ndi_instance'):
-        _now = time.time()
-        if _now - g_state['ndi_last_time'] >= 1.0 / max(1, g_state['ndi_fps']):
-            g_state['ndi_last_time'] = _now
-            try:
-                _x = g_state['ndi_cap_x']; _y = g_state['ndi_cap_y']
-                _w = g_state['ndi_cap_w']; _h = g_state['ndi_cap_h']
-                _buf = _gdi_capture(_x, _y, _w, _h)
-                _vf = NDIlib_video_frame_v2_t()
-                _vf.xres = _w; _vf.yres = _h
-                _vf.FourCC = NDIlib_FourCC_type_BGRX
-                _vf.frame_rate_N = g_state['ndi_fps']; _vf.frame_rate_D = 1
-                _vf.picture_aspect_ratio = float(_w) / float(_h)
-                _vf.frame_format_type = 0; _vf.timecode = 0
-                _vf.p_data = ctypes.cast(_buf, ctypes.c_void_p).value
-                _vf.line_stride_in_bytes = _w * 4
-                _vf.p_metadata = None; _vf.timestamp = 0
-                _ndi_loader.lib.NDIlib_send_send_video_v2(
-                    ctypes.c_void_p(g_state['ndi_instance']), ctypes.byref(_vf))
-            except Exception as _e:
-                pass
 
 # ── NDI Controls ──────────────────────────────────────────────────────────────
 def _ndi_start():
