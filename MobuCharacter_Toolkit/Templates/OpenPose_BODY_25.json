@@ -1,0 +1,22 @@
+{
+    "DisplayName": "OpenPose BODY_25",
+    "Description": "Standard OpenPose BODY_25 mapping for HIK characterization.",
+    "ReferenceLink": "OP_Root",
+    "HipsLink": "OP_08_MidHip",
+    "SpineLink": "OP_01_Neck",
+    "NeckLink": "OP_00_Nose",
+    "LeftShoulderLink": "OP_05_LShoulder",
+    "LeftArmLink": "OP_06_LElbow",
+    "LeftForeArmLink": "OP_07_LWrist",
+    "RightShoulderLink": "OP_02_RShoulder",
+    "RightArmLink": "OP_03_RElbow",
+    "RightForeArmLink": "OP_04_RWrist",
+    "LeftUpLegLink": "OP_12_LHip",
+    "LeftLegLink": "OP_13_LKnee",
+    "LeftFootLink": "OP_14_LAnkle",
+    "RightUpLegLink": "OP_09_RHip",
+    "RightLegLink": "OP_10_RKnee",
+    "RightFootLink": "OP_11_RAnkle",
+    "LeftToeBaseLink": "OP_19_LBigToe",
+    "RightToeBaseLink": "OP_22_RBigToe"
+}
