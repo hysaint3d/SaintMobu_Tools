@@ -431,22 +431,43 @@ WEB_UI_HTML = """<!DOCTYPE html>
   .video-ctrl-block {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: 16px; padding: 16px;
-    display: flex; flex-direction: column; gap: 12px;
+    display: flex; flex-direction: column; gap: 14px;
   }
-  .video-ctrl-block h2 {
+  .obs-header {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .obs-header h2 {
     font-size: 0.75rem; font-weight: 600; letter-spacing: 2px;
     text-transform: uppercase; color: var(--muted);
   }
-  .obs-row { display: flex; gap: 8px; }
-  #obs-scene-list {
-    flex: 1; background: var(--bg); border: 1px solid var(--border);
-    color: var(--text); border-radius: 10px; padding: 8px 12px;
-    font-size: 0.9rem; outline: none;
+  #btn-refresh-scenes {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); border-radius: 8px;
+    padding: 4px 10px; font-size: 0.75rem; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; gap: 4px;
   }
-  #btn-switch-scene {
-    background: var(--surface); border: 1px solid var(--border);
-    color: var(--text); border-radius: 10px; padding: 8px 16px;
-    font-size: 0.85rem; font-weight: 600; cursor: pointer;
+  #btn-refresh-scenes:hover { border-color: var(--accent); color: var(--accent); }
+  #btn-refresh-scenes.spinning svg { animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #scene-btn-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  #scene-btn-grid .scene-empty {
+    font-size: 0.8rem; color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .scene-btn {
+    padding: 10px 16px;
+    background: #1a1a24; border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text);
+    font-size: 0.85rem; font-weight: 500; cursor: pointer;
+    transition: all 0.18s ease; white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .scene-btn:hover { background: #22223a; border-color: var(--accent); color: white; }
+  .scene-btn:active { transform: scale(0.95); }
+  .scene-btn.active {
+    background: #e65100; border-color: #e65100; color: white;
+    box-shadow: 0 0 14px rgba(230,81,0,0.4); font-weight: 700;
   }
 
   .input-group {
@@ -599,12 +620,15 @@ WEB_UI_HTML = """<!DOCTYPE html>
   </div>
 
   <div class="video-ctrl-block">
-    <h2>Video Control (OBS)</h2>
-    <div class="obs-row">
-      <select id="obs-scene-list">
-        <option value="">— No Scenes —</option>
-      </select>
-      <button id="btn-switch-scene" onclick="switchScene()">Switch</button>
+    <div class="obs-header">
+      <h2>🎥 OBS Scene Switch</h2>
+      <button id="btn-refresh-scenes" onclick="refreshScenes()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+        Refresh
+      </button>
+    </div>
+    <div id="scene-btn-grid">
+      <span class="scene-empty">— Connect to load scenes —</span>
     </div>
   </div>
 
@@ -714,35 +738,65 @@ WEB_UI_HTML = """<!DOCTYPE html>
       });
   }
 
+  let activeScene = '';
+
   function fetchScenes() {
-    if (!serverBase || sceneFetched) return;
+    if (!serverBase) return;
+    const grid = document.getElementById('scene-btn-grid');
+    grid.innerHTML = '<span class="scene-empty">Loading scenes...</span>';
+    addLog('Fetching OBS scenes...');
     fetch(serverBase + '/obs_scenes')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
       .then(scenes => {
-        const sel = document.getElementById('obs-scene-list');
-        sel.innerHTML = '';
+        grid.innerHTML = '';
         if (!scenes || scenes.length === 0) {
-          sel.innerHTML = '<option value="">— No Scenes —</option>';
+          grid.innerHTML = '<span class="scene-empty">— No scenes. Is OBS connected? —</span>';
+          addLog('OBS: no scenes returned.', 'err');
           return;
         }
         scenes.forEach(s => {
-          const opt = document.createElement('option');
-          opt.value = s; opt.textContent = s;
-          sel.appendChild(opt);
+          const btn = document.createElement('button');
+          btn.className = 'scene-btn' + (s === activeScene ? ' active' : '');
+          btn.textContent = s;
+          btn.onclick = () => switchScene(s, btn);
+          grid.appendChild(btn);
         });
         sceneFetched = true;
-        addLog('OBS Scenes loaded.', 'ok');
-      }).catch(() => {});
+        addLog('OBS: ' + scenes.length + ' scenes loaded.', 'ok');
+      })
+      .catch(e => {
+        grid.innerHTML = '<span class="scene-empty">— Failed to load scenes —</span>';
+        addLog('OBS fetch failed: ' + e.message, 'err');
+      });
   }
 
-  function switchScene() {
-    const scene = document.getElementById('obs-scene-list').value;
-    if (!scene) return;
+  function refreshScenes() {
+    sceneFetched = false;
+    const btn = document.getElementById('btn-refresh-scenes');
+    btn.classList.add('spinning');
+    setTimeout(() => btn.classList.remove('spinning'), 800);
+    fetchScenes();
+  }
+
+  function switchScene(sceneName, btnEl) {
+    if (!serverBase || !sceneName) return;
+    document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    activeScene = sceneName;
     fetch(serverBase + '/switch_scene', {
       method: 'POST',
-      body: JSON.stringify({ scene })
-    }).then(() => addLog('OBS: Switched to ' + scene, 'ok'))
-      .catch(e => addLog('Switch failed: ' + e.message, 'err'));
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scene: sceneName })
+    }).then(r => r.json())
+      .then(() => addLog('OBS: switched to "' + sceneName + '"', 'ok'))
+      .catch(e => {
+        addLog('OBS switch failed: ' + e.message, 'err');
+        document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+        activeScene = '';
+      });
   }
 
   function sendCmd(action) {
