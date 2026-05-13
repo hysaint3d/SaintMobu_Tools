@@ -575,7 +575,7 @@ WEB_UI_HTML = """<!DOCTYPE html>
   <div style="display:flex;flex-direction:column;gap:6px;">
     <label style="font-size:.72rem;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted);">SyncMaster Server Address</label>
     <div class="server-row">
-      <input id="server-addr" type="text" value="" placeholder="192.168.1.x:5000" autocomplete="off">
+      <input id="server-addr" type="text" value="[[SERVER_ADDR]]" placeholder="192.168.1.x:5000" autocomplete="off">
       <button id="btn-connect-server" onclick="connectServer()">Connect</button>
     </div>
   </div>
@@ -810,11 +810,20 @@ WEB_UI_HTML = """<!DOCTYPE html>
   }
 
   window.addEventListener('load', () => {
-    if (location.protocol.startsWith('http')) {
-      serverBase = location.origin;
+    const addrInput = document.getElementById('server-addr');
+    const protocol = location.protocol;
+    
+    if (protocol.startsWith('http')) {
+      // If served via web, ensure input matches current host and connect
+      if (!addrInput.value || addrInput.value.includes('[[SERVER_ADDR]]')) {
+        addrInput.value = location.host;
+      }
       connectServer();
     } else {
-      document.getElementById('server-addr').value = '127.0.0.1:5000';
+      // Local file fallback
+      if (!addrInput.value || addrInput.value.includes('[[SERVER_ADDR]]')) {
+        addrInput.value = '127.0.0.1:5000';
+      }
     }
   });
 </script>
@@ -898,7 +907,7 @@ class SyncMasterApp:
         def index():
             if request.method == "OPTIONS":
                 return Response(status=200)
-            return render_template_string(WEB_UI_HTML)
+            return WEB_UI_HTML.replace('[[SERVER_ADDR]]', f"{self.local_ip}:5000")
 
         @app.route("/status", methods=["GET", "OPTIONS"])
         def status():
