@@ -1457,6 +1457,30 @@ def OnUIIdle(c, e):
             FBSystem().CurrentTake = takes[idx + 1]
             _update_status('Take: ' + takes[idx + 1].Name)
 
+# ── Win32 Window Helpers ──────────────────────────────────────────────────────
+_WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+class _RECT(ctypes.Structure):
+    _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long), ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+
+def find_video_out_window():
+    """Search for the MotionBuilder Video Output window and return its rect."""
+    result = {"hwnd": None, "rect": None}
+    def callback(hwnd, lparam):
+        length = _user32.GetWindowTextLengthW(hwnd)
+        if length > 0:
+            buff = ctypes.create_unicode_buffer(length + 1)
+            _user32.GetWindowTextW(hwnd, buff, length + 1)
+            title = buff.value.lower()
+            if "video out" in title:
+                rect = _RECT()
+                _user32.GetWindowRect(hwnd, ctypes.byref(rect))
+                result["hwnd"] = hwnd
+                result["rect"] = rect
+                return False
+        return True
+    _user32.EnumWindows(_WNDENUMPROC(callback), 0)
+    return result
 
 # ── NDI Controls ──────────────────────────────────────────────────────────────
 def _ndi_start():
@@ -1553,6 +1577,21 @@ def OnNDISetCamClick(c, e):
             except Exception as ex:
                 print('[NDI] SetCamera error:', ex)
             break
+
+def OnNDIDetectVideoOutClick(control, event):
+    res = find_video_out_window()
+    if res["rect"]:
+        r = res["rect"]
+        w = r.right - r.left
+        h = r.bottom - r.top
+        if 'ndi_x' in g_ui: g_ui['ndi_x'].Text = str(r.left)
+        if 'ndi_y' in g_ui: g_ui['ndi_y'].Text = str(r.top)
+        if 'ndi_w' in g_ui: g_ui['ndi_w'].Text = str(w)
+        if 'ndi_h' in g_ui: g_ui['ndi_h'].Text = str(h)
+        _update_status('NDI: Detected Video Out at {},{}'.format(r.left, r.top))
+        print('[NDI] Detected Video Out at {},{} ({}x{})'.format(r.left, r.top, w, h))
+    else:
+        FBMessageBox('NDI Out', 'Could not find "Video Out" window.\nMake sure Video Output device is enabled in Mobu.', 'OK')
 
 # ── UI ─────────────────────────────────────────────────────────────────────────
 def PopulateTool(tool):
@@ -1843,6 +1882,8 @@ def PopulateTool(tool):
     g_ui['ndi_h'] = FBEdit(); g_ui['ndi_h'].Text = str(g_state['ndi_cap_h'])
     lyt_ndi_wh.Add(g_ui['ndi_h'], 55)
     view_ndi.Add(lyt_ndi_wh, 30)
+
+    view_ndi.Add(btn('Auto-Detect Video Out Window', OnNDIDetectVideoOutClick), 35)
 
     view_ndi.Add(hdr('STREAM'), 22)
     g_ui['ndi_toggle'] = FBButton()
