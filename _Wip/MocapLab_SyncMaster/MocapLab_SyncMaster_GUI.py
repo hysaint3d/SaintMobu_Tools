@@ -285,18 +285,14 @@ def check_target_online(key, ip, port, password=""):
     except:
         return False
 
-
 def send_warudo(ip, port, cmd, log, take_name=""):
     """Send JSON action to Warudo via WebSocket (Compatible with 'On WebSocket Action' node)."""
     try:
         import websocket
         ws = websocket.create_connection(f"ws://{ip}:{port}", timeout=2)
-        # Format for 'On WebSocket Action' node
         payload = {
             "action": "RecordStart" if cmd == "start" else "RecordStop",
-            "data": {
-                "take_name": take_name
-            }
+            "data": { "take_name": take_name }
         }
         ws.send(json.dumps(payload))
         ws.close()
@@ -304,67 +300,448 @@ def send_warudo(ip, port, cmd, log, take_name=""):
     except Exception as e:
         log(f"[Warudo] ERROR: {e}")
 
-# ── Web UI HTML ───────────────────────────────────────────────────────────────
 WEB_UI_HTML = """<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>MocapLab SyncMaster</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:         #0a0a0f;
+    --surface:    #111118;
+    --border:     #2a2a3a;
+    --text:       #e2e2f0;
+    --muted:      #666680;
+    --red:        #e53935;
+    --red-dim:    #7b1c1a;
+    --green:      #43a047;
+    --accent:     #7c4dff;
+    --timer-idle: #444466;
+    --timer-rec:  #ff4444;
+  }
+
+  html, body {
+    height: 100%; width: 100%;
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    overflow-x: hidden;
+  }
+
   body {
-    font-family: 'Segoe UI', system-ui, sans-serif;
-    background: #111; color: #eee;
     display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    min-height: 100vh; gap: 24px; padding: 20px;
+    align-items: center; justify-content: flex-start;
+    min-height: 100dvh;
+    padding: 0 16px 40px;
+    gap: 0;
   }
-  h1 { font-size: 1.4rem; color: #aaa; letter-spacing: 2px; text-transform: uppercase; }
+
+  header {
+    width: 100%; max-width: 540px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 0 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  header h1 {
+    font-size: 1rem; font-weight: 600; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--muted);
+  }
+  #dot-status {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.4s;
+    box-shadow: 0 0 6px transparent;
+  }
+  #dot-status.connected   { background: var(--green); box-shadow: 0 0 10px var(--green); }
+  #dot-status.recording   { background: var(--red);   box-shadow: 0 0 14px var(--red); animation: pulse 1s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+  }
+
+  main {
+    width: 100%; max-width: 540px;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+
+  .timer-block {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 32px 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+  }
   #timer {
-    font-size: 4rem; font-weight: bold; letter-spacing: 4px;
-    color: #fff; font-variant-numeric: tabular-nums;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(3.5rem, 14vw, 5.5rem);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--timer-idle);
+    transition: color 0.4s, text-shadow 0.4s;
+    line-height: 1;
+    tab-size: 4;
   }
-  #timer.recording { color: #f44336; }
-  #status { font-size: 0.9rem; color: #888; }
+  #timer.recording {
+    color: var(--timer-rec);
+    text-shadow: 0 0 40px rgba(255,68,68,0.3);
+  }
+  #rec-label {
+    margin-top: 12px;
+    font-size: 0.75rem; font-weight: 600; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--muted);
+    transition: color 0.3s;
+  }
+  #rec-label.recording { color: var(--red); }
+  #take-display {
+    margin-top: 6px; font-size: 0.8rem;
+    color: var(--muted); font-family: 'JetBrains Mono', monospace;
+    text-align: center; word-break: break-all;
+    min-height: 1.2em;
+  }
+
+  .targets-block {
+    display: flex; justify-content: space-around;
+    padding: 12px 10px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 14px;
+    gap: 8px;
+  }
+  .target-item {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    flex: 1;
+  }
+  .target-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #333; transition: all 0.3s;
+  }
+  .target-label {
+    font-size: 0.6rem; font-weight: 700; color: var(--muted);
+    letter-spacing: 1px; text-transform: uppercase;
+  }
+  .dot-green  { background: var(--green); box-shadow: 0 0 10px var(--green); }
+  .dot-red    { background: var(--red);   box-shadow: 0 0 10px var(--red); }
+  .dot-yellow { background: #fbc02d;     box-shadow: 0 0 10px #fbc02d; }
+  .dot-gray   { background: #333;        box-shadow: none; }
+
+  .video-ctrl-block {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 16px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .video-ctrl-block h2 {
+    font-size: 0.75rem; font-weight: 600; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .obs-row { display: flex; gap: 8px; }
+  #obs-scene-list {
+    flex: 1; background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); border-radius: 10px; padding: 8px 12px;
+    font-size: 0.9rem; outline: none;
+  }
+  #btn-switch-scene {
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); border-radius: 10px; padding: 8px 16px;
+    font-size: 0.85rem; font-weight: 600; cursor: pointer;
+  }
+
+  .input-group {
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .input-group label {
+    font-size: 0.75rem; font-weight: 600;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .input-group input {
+    width: 100%;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); border-radius: 10px;
+    padding: 12px 16px; font-size: 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    outline: none; transition: border-color 0.2s;
+  }
+  .input-group input:focus { border-color: var(--accent); }
+  .input-group input::placeholder { color: var(--muted); }
+
+  .server-row {
+    display: flex; gap: 8px; align-items: center;
+  }
+  .server-row input {
+    flex: 1;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); border-radius: 10px;
+    padding: 10px 14px; font-size: 0.9rem;
+    font-family: 'JetBrains Mono', monospace;
+    outline: none; transition: border-color 0.2s;
+  }
+  .server-row input:focus { border-color: var(--accent); }
+  #btn-connect-server {
+    padding: 10px 20px; border: none; border-radius: 10px;
+    background: var(--accent); color: white;
+    font-size: 0.85rem; font-weight: 600; cursor: pointer;
+    white-space: nowrap; transition: opacity 0.2s;
+  }
+
+  .btn-row {
+    display: flex; gap: 12px;
+  }
   .btn {
-    width: 220px; height: 70px; border: none; border-radius: 16px;
-    font-size: 1.3rem; font-weight: bold; cursor: pointer;
-    transition: transform 0.1s, opacity 0.2s;
-    letter-spacing: 1px;
+    flex: 1; border: none; border-radius: 16px;
+    font-size: 1.1rem; font-weight: 700;
+    padding: 22px 12px; cursor: pointer;
+    letter-spacing: 1px; text-transform: uppercase;
+    transition: transform 0.12s ease, opacity 0.2s, box-shadow 0.2s;
+    -webkit-tap-highlight-color: transparent;
   }
   .btn:active { transform: scale(0.96); }
-  #btn-start { background: #c62828; color: white; }
-  #btn-start:hover { background: #e53935; }
-  #btn-stop  { background: #333; color: #aaa; border: 2px solid #555; }
-  #btn-stop:hover  { background: #444; }
-  .take-row { display: flex; gap: 8px; align-items: center; }
-  .take-row input {
-    background: #222; border: 1px solid #444; color: #eee;
-    padding: 8px 12px; border-radius: 8px; font-size: 0.9rem;
-    width: 220px;
+
+  #btn-start {
+    background: var(--red); color: white;
+    box-shadow: 0 4px 24px rgba(229,57,53,0.25);
   }
-  footer { color: #444; font-size: 0.75rem; }
+  #btn-start:hover { box-shadow: 0 4px 32px rgba(229,57,53,0.45); }
+  #btn-start:disabled { background: var(--red-dim); box-shadow: none; cursor: not-allowed; }
+
+  #btn-stop {
+    background: var(--surface); color: var(--muted);
+    border: 1px solid var(--border);
+    flex: 0 0 auto; width: 120px;
+  }
+  #btn-stop:hover { background: #1e1e28; color: var(--text); }
+  #btn-stop:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .log-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    max-height: 140px;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .log-block::-webkit-scrollbar { width: 4px; }
+  .log-block::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .log-entry {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem; color: var(--muted);
+    line-height: 1.5;
+  }
+  .log-entry.ok  { color: #66bb6a; }
+  .log-entry.err { color: #ef9a9a; }
+  .log-entry.ts  { color: #888; }
+
+  footer {
+    margin-top: 24px;
+    text-align: center;
+    font-size: 0.7rem; color: #333344;
+    letter-spacing: 1px;
+  }
 </style>
 </head>
 <body>
-  <h1>🎬 MocapLab SyncMaster</h1>
-  <div id="timer">00:00:00</div>
-  <div id="status">Idle</div>
 
-  <div class="take-row">
-    <input id="take-name" type="text" placeholder="Take Name (optional)">
+<header>
+  <h1>🎬 MocapLab SyncMaster</h1>
+  <div id="dot-status" title="Connection Status"></div>
+</header>
+
+<main>
+  <div style="display:flex;flex-direction:column;gap:6px;">
+    <label style="font-size:.72rem;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted);">SyncMaster Server Address</label>
+    <div class="server-row">
+      <input id="server-addr" type="text" value="" placeholder="192.168.1.x:5000" autocomplete="off">
+      <button id="btn-connect-server" onclick="connectServer()">Connect</button>
+    </div>
   </div>
 
-  <button class="btn" id="btn-start" onclick="sendCmd('start')">⏺ START</button>
-  <button class="btn" id="btn-stop"  onclick="sendCmd('stop')">⏹ STOP</button>
+  <div class="timer-block">
+    <div id="timer">00:00:00</div>
+    <div id="rec-label">Idle</div>
+    <div id="take-display"></div>
+  </div>
 
-  <footer>Mocap Lab × Antigravity — LAN Remote</footer>
+  <div class="targets-block">
+    <div class="target-item">
+      <div id="dot-motive" class="target-dot"></div>
+      <div class="target-label">Motive</div>
+    </div>
+    <div class="target-item">
+      <div id="dot-mobu" class="target-dot"></div>
+      <div class="target-label">Mobu</div>
+    </div>
+    <div class="target-item">
+      <div id="dot-ue5" class="target-dot"></div>
+      <div class="target-label">UE5</div>
+    </div>
+    <div class="target-item">
+      <div id="dot-warudo" class="target-dot"></div>
+      <div class="target-label">Warudo</div>
+    </div>
+    <div class="target-item">
+      <div id="dot-obs" class="target-dot"></div>
+      <div class="target-label">OBS</div>
+    </div>
+  </div>
+
+  <div class="input-group">
+    <label>Take Name</label>
+    <input id="take-name" type="text" placeholder="e.g. Scene01_A" autocomplete="off" autocorrect="off">
+  </div>
+
+  <div class="btn-row">
+    <button class="btn" id="btn-start" onclick="sendCmd('start')" disabled>⏺ START</button>
+    <button class="btn" id="btn-stop"  onclick="sendCmd('stop')"  disabled>⏹ STOP</button>
+  </div>
+
+  <div class="video-ctrl-block">
+    <h2>Video Control (OBS)</h2>
+    <div class="obs-row">
+      <select id="obs-scene-list">
+        <option value="">— No Scenes —</option>
+      </select>
+      <button id="btn-switch-scene" onclick="switchScene()">Switch</button>
+    </div>
+  </div>
+
+  <div class="log-block" id="log-area">
+    <div class="log-entry ts">— Waiting for server connection —</div>
+  </div>
+
+</main>
+
+<footer>Mocap Lab × Antigravity &nbsp;|&nbsp; SaintMobu Tools</footer>
 
 <script>
+  let serverBase = '';
+  let polling = null;
+  let isConnected = false;
+  let sceneFetched = false;
+
+  function pad(n) { return String(Math.floor(n)).padStart(2, '0'); }
+  function fmtSec(s) {
+    return pad(s / 3600) + ':' + pad((s % 3600) / 60) + ':' + pad(s % 60);
+  }
+
+  function addLog(msg, type = '') {
+    const el = document.getElementById('log-area');
+    const ts = new Date().toLocaleTimeString('en', {hour12: false});
+    const div = document.createElement('div');
+    div.className = 'log-entry ' + type;
+    div.textContent = '[' + ts + '] ' + msg;
+    el.appendChild(div);
+    el.scrollTop = el.scrollHeight;
+    while (el.children.length > 60) el.removeChild(el.firstChild);
+  }
+
+  function setConnected(ok) {
+    isConnected = ok;
+    const dot = document.getElementById('dot-status');
+    if (ok) {
+      dot.className = 'connected';
+      document.getElementById('btn-start').disabled = false;
+      document.getElementById('btn-stop').disabled = false;
+    } else {
+      dot.className = '';
+      document.getElementById('btn-start').disabled = true;
+      document.getElementById('btn-stop').disabled = true;
+      sceneFetched = false;
+    }
+  }
+
+  function connectServer() {
+    let addr = document.getElementById('server-addr').value.trim();
+    if (!addr) { addLog('Please enter a server address.', 'err'); return; }
+    if (!addr.startsWith('http')) addr = 'http://' + addr;
+    serverBase = addr.replace(/\/$/, '');
+    addLog('Connecting to ' + serverBase + ' ...');
+    if (polling) clearInterval(polling);
+    poll();
+    polling = setInterval(poll, 1000);
+  }
+
+  function poll() {
+    if (!serverBase) return;
+    fetch(serverBase + '/status', { signal: AbortSignal.timeout(2000) })
+      .then(r => r.json())
+      .then(d => {
+        if (!isConnected) { 
+          addLog('Connected to SyncMaster.', 'ok'); 
+          setConnected(true); 
+          fetchScenes();
+        }
+        const timer = document.getElementById('timer');
+        const recLabel = document.getElementById('rec-label');
+        const takeDisplay = document.getElementById('take-display');
+        const dot = document.getElementById('dot-status');
+        const btnStart = document.getElementById('btn-start');
+        timer.textContent = fmtSec(d.elapsed || 0);
+        if (d.recording) {
+          timer.className = 'recording';
+          recLabel.className = 'recording';
+          recLabel.textContent = '⏺ Recording';
+          dot.className = 'recording';
+          takeDisplay.textContent = d.take_name || '';
+          btnStart.disabled = true;
+        } else {
+          timer.className = '';
+          recLabel.className = '';
+          recLabel.textContent = 'Idle';
+          dot.className = 'connected';
+          takeDisplay.textContent = '';
+          btnStart.disabled = false;
+        }
+        if (d.targets) {
+          Object.keys(d.targets).forEach(key => {
+            const el = document.getElementById('dot-' + key);
+            if (el) el.className = 'target-dot dot-' + d.targets[key];
+          });
+        }
+      })
+      .catch(() => {
+        if (isConnected) { addLog('Lost connection to SyncMaster.', 'err'); setConnected(false); }
+      });
+  }
+
+  function fetchScenes() {
+    if (!serverBase || sceneFetched) return;
+    fetch(serverBase + '/obs_scenes')
+      .then(r => r.json())
+      .then(scenes => {
+        const sel = document.getElementById('obs-scene-list');
+        sel.innerHTML = '';
+        if (!scenes || scenes.length === 0) {
+          sel.innerHTML = '<option value="">— No Scenes —</option>';
+          return;
+        }
+        scenes.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s; opt.textContent = s;
+          sel.appendChild(opt);
+        });
+        sceneFetched = true;
+        addLog('OBS Scenes loaded.', 'ok');
+      }).catch(() => {});
+  }
+
+  function switchScene() {
+    const scene = document.getElementById('obs-scene-list').value;
+    if (!scene) return;
+    fetch(serverBase + '/switch_scene', {
+      method: 'POST',
+      body: JSON.stringify({ scene })
+    }).then(() => addLog('OBS: Switched to ' + scene, 'ok'))
+      .catch(e => addLog('Switch failed: ' + e.message, 'err'));
+  }
+
   function sendCmd(action) {
+    if (!serverBase) { addLog('Not connected to server.', 'err'); return; }
     const takeName = document.getElementById('take-name').value.trim();
-    fetch('/record', {
+    fetch(serverBase + '/record', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, take_name: takeName })
@@ -406,6 +783,7 @@ class SyncMasterApp:
 
         self.config_path = os.path.join(os.path.dirname(__file__), "sync_config.json")
         self.local_ip = self._get_local_ip()
+        self.status_colors = {} # To track connectivity for web remote
 
         # Flask app in background thread
         self.flask_app = self._build_flask()
@@ -443,6 +821,7 @@ class SyncMasterApp:
 
     def _set_status_light(self, key, color):
         colors = {"gray": "#333333", "yellow": "#fbc02d", "green": "#4caf50", "red": "#f44336"}
+        self.status_colors[key] = color # Store for web remote
         if key in self.targets and "light" in self.targets[key]:
             canvas = self.targets[key]["light"]
             self.root.after(0, lambda: canvas.itemconfig("circle", fill=colors.get(color, "#333333")))
@@ -472,8 +851,32 @@ class SyncMasterApp:
             return jsonify({
                 "recording": self.is_recording,
                 "elapsed": self.elapsed_sec,
-                "take_name": self.current_take
+                "take_name": self.current_take,
+                "targets": self.status_colors
             })
+
+        @app.route("/obs_scenes", methods=["GET", "OPTIONS"])
+        def obs_scenes():
+            if request.method == "OPTIONS": return Response(status=200)
+            if "obs" not in self.targets: return jsonify([])
+            ip = self.targets["obs"]["ip"].get()
+            port = self.targets["obs"]["port"].get()
+            pw = self.targets["obs"]["password"].get()
+            scenes = get_obs_scene_list(ip, port, pw, self.log)
+            return jsonify(scenes)
+
+        @app.route("/switch_scene", methods=["POST", "OPTIONS"])
+        def switch_scene():
+            if request.method == "OPTIONS": return Response(status=200)
+            data = request.get_json(force=True)
+            scene = data.get("scene", "")
+            if "obs" not in self.targets or not scene: return jsonify({"ok": False})
+            ip = self.targets["obs"]["ip"].get()
+            port = self.targets["obs"]["port"].get()
+            pw = self.targets["obs"]["password"].get()
+            def task(): obs_switch_scene(ip, port, pw, scene, self.log)
+            threading.Thread(target=task, daemon=True).start()
+            return jsonify({"ok": True})
 
         @app.route("/record", methods=["POST", "OPTIONS"])
         def record():

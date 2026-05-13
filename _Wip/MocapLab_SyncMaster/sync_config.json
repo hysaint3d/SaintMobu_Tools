@@ -3,8 +3,7 @@
   "motive": {
     "ip": "10.1.1.1",
     "port": "1510",
-    "enabled": true,
-    "version": "3.x"
+    "enabled": true
   },
   "mobu": {
     "ip": "127.0.0.1",

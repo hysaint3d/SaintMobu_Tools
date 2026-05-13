@@ -175,6 +175,52 @@
   #btn-stop:hover { background: #1e1e28; color: var(--text); }
   #btn-stop:disabled { opacity: 0.3; cursor: not-allowed; }
 
+  /* ── Targets Health ── */
+  .targets-block {
+    display: flex; justify-content: space-around;
+    padding: 12px 10px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 14px;
+    gap: 8px;
+  }
+  .target-item {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    flex: 1;
+  }
+  .target-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #333; transition: all 0.3s;
+  }
+  .target-label {
+    font-size: 0.6rem; font-weight: 700; color: var(--muted);
+    letter-spacing: 1px; text-transform: uppercase;
+  }
+  .dot-green  { background: var(--green); box-shadow: 0 0 10px var(--green); }
+  .dot-red    { background: var(--red);   box-shadow: 0 0 10px var(--red); }
+  .dot-yellow { background: #fbc02d;     box-shadow: 0 0 10px #fbc02d; }
+  .dot-gray   { background: #333;        box-shadow: none; }
+
+  /* ── Video Ctrl ── */
+  .video-ctrl-block {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 16px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .video-ctrl-block h2 {
+    font-size: 0.75rem; font-weight: 600; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .obs-row { display: flex; gap: 8px; }
+  #obs-scene-list {
+    flex: 1; background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); border-radius: 10px; padding: 8px 12px;
+    font-size: 0.9rem; outline: none;
+  }
+  #btn-switch-scene {
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); border-radius: 10px; padding: 8px 16px;
+    font-size: 0.85rem; font-weight: 600; cursor: pointer;
+  }
+
   /* ── Status Log ── */
   .log-block {
     background: var(--surface);
@@ -230,6 +276,30 @@
     <div id="take-display"></div>
   </div>
 
+  <!-- Targets Health -->
+  <div class="targets-block">
+    <div class="target-item">
+      <div id="dot-motive" class="target-dot"></div>
+      <div class="target-label">Motive</div>
+    </div>
+    <div class="target-item">
+      <div id="dot-mobu" class="target-dot"></div>
+      <div class="target-label">Mobu</div>
+    </div>
+    <div class="target-item">
+      <div id="dot-ue5" class="target-dot"></div>
+      <div class="target-label">UE5</div>
+    </div>
+    <div class="target-item">
+      <div id="dot-warudo" class="target-dot"></div>
+      <div class="target-label">Warudo</div>
+    </div>
+    <div class="target-item">
+      <div id="dot-obs" class="target-dot"></div>
+      <div class="target-label">OBS</div>
+    </div>
+  </div>
+
   <!-- Take Name -->
   <div class="input-group">
     <label>Take Name</label>
@@ -240,6 +310,17 @@
   <div class="btn-row">
     <button class="btn" id="btn-start" onclick="sendCmd('start')" disabled>⏺ START</button>
     <button class="btn" id="btn-stop"  onclick="sendCmd('stop')"  disabled>⏹ STOP</button>
+  </div>
+
+  <!-- Video Ctrl -->
+  <div class="video-ctrl-block">
+    <h2>Video Control (OBS)</h2>
+    <div class="obs-row">
+      <select id="obs-scene-list">
+        <option value="">— No Scenes —</option>
+      </select>
+      <button id="btn-switch-scene" onclick="switchScene()">Switch</button>
+    </div>
   </div>
 
   <!-- Log -->
@@ -255,6 +336,7 @@
   let serverBase = '';
   let polling = null;
   let isConnected = false;
+  let sceneFetched = false;
 
   function pad(n) { return String(Math.floor(n)).padStart(2, '0'); }
 
@@ -270,7 +352,6 @@
     div.textContent = '[' + ts + '] ' + msg;
     el.appendChild(div);
     el.scrollTop = el.scrollHeight;
-    // Keep max 60 lines
     while (el.children.length > 60) el.removeChild(el.firstChild);
   }
 
@@ -285,6 +366,7 @@
       dot.className = '';
       document.getElementById('btn-start').disabled = true;
       document.getElementById('btn-stop').disabled = true;
+      sceneFetched = false;
     }
   }
 
@@ -296,7 +378,7 @@
     addLog('Connecting to ' + serverBase + ' ...');
 
     if (polling) clearInterval(polling);
-    poll(); // immediate check
+    poll();
     polling = setInterval(poll, 1000);
   }
 
@@ -305,7 +387,11 @@
     fetch(serverBase + '/status', { signal: AbortSignal.timeout(2000) })
       .then(r => r.json())
       .then(d => {
-        if (!isConnected) { addLog('Connected to SyncMaster.', 'ok'); setConnected(true); }
+        if (!isConnected) { 
+          addLog('Connected to SyncMaster.', 'ok'); 
+          setConnected(true); 
+          fetchScenes();
+        }
 
         const timer = document.getElementById('timer');
         const recLabel = document.getElementById('rec-label');
@@ -330,10 +416,49 @@
           takeDisplay.textContent = '';
           btnStart.disabled = false;
         }
+
+        // Update Target Health Dots
+        if (d.targets) {
+          Object.keys(d.targets).forEach(key => {
+            const el = document.getElementById('dot-' + key);
+            if (el) el.className = 'target-dot dot-' + d.targets[key];
+          });
+        }
       })
       .catch(() => {
         if (isConnected) { addLog('Lost connection to SyncMaster.', 'err'); setConnected(false); }
       });
+  }
+
+  function fetchScenes() {
+    if (!serverBase || sceneFetched) return;
+    fetch(serverBase + '/obs_scenes')
+      .then(r => r.json())
+      .then(scenes => {
+        const sel = document.getElementById('obs-scene-list');
+        sel.innerHTML = '';
+        if (!scenes || scenes.length === 0) {
+          sel.innerHTML = '<option value="">— No Scenes —</option>';
+          return;
+        }
+        scenes.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s; opt.textContent = s;
+          sel.appendChild(opt);
+        });
+        sceneFetched = true;
+        addLog('OBS Scenes loaded.', 'ok');
+      }).catch(() => {});
+  }
+
+  function switchScene() {
+    const scene = document.getElementById('obs-scene-list').value;
+    if (!scene) return;
+    fetch(serverBase + '/switch_scene', {
+      method: 'POST',
+      body: JSON.stringify({ scene })
+    }).then(() => addLog('OBS: Switched to ' + scene, 'ok'))
+      .catch(e => addLog('Switch failed: ' + e.message, 'err'));
   }
 
   function sendCmd(action) {
@@ -355,7 +480,6 @@
     });
   }
 
-  // Auto-fill server address from the page URL (if served from Flask)
   window.addEventListener('load', () => {
     const host = location.hostname;
     const port = location.port;
