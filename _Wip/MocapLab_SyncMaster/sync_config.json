@@ -1,9 +1,9 @@
 {
   "take_name": "Take",
   "motive": {
-    "ip": "1270.0.1",
+    "ip": "10.1.1.1",
     "port": "1510",
-    "enabled": false
+    "enabled": true
   },
   "mobu": {
     "ip": "127.0.0.1",
@@ -21,10 +21,10 @@
     "enabled": false
   },
   "obs": {
-    "ip": "127.0.0.1",
+    "ip": "10.1.1.103",
     "port": "4455",
     "enabled": true,
     "password": "03807628",
-    "scene": "\u5834\u666f"
+    "scene": "UE"
   }
 }
