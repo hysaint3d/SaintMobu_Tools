@@ -1,7 +1,7 @@
 {
-  "TemplateName": "Vicon 60",
+  "TemplateName": "Vicon 67",
   "ExpectedMarkers": [
-    "LFHD", "LBHD", "RFHD", "RBHD",
+    "LFHD", "LBHD", "RFHD", "RBHD", "ARIEL",
     "C7", "T10", "LT10", "RT10", "CLAV", "STRN",
     "LFSH", "LTSH", "LBSH",
     "LUPA", "LELB", "LBEL", "LFRM", "LIWR", "LOWR", "LIHAND", "LOHAND",
@@ -14,7 +14,7 @@
     "RTHI", "RKNE", "RKNU", "RSHN", "RANK", "RHEL", "RMT5", "RMT1", "RTOE"
   ],
   "RigidBodies": {
-    "Head": ["LFHD", "LBHD", "RFHD", "RBHD"],
+    "Head": ["LFHD", "LBHD", "RFHD", "RBHD", "ARIEL"],
     "Chest": ["C7", "T10", "LT10", "RT10", "CLAV", "STRN"],
     "Hips": ["LFWT", "LMWT", "LBWT", "RFWT", "RMWT", "RBWT"],
     "LeftArm": ["LFSH", "LTSH", "LBSH", "LUPA", "LELB", "LBEL"],
@@ -28,7 +28,7 @@
   },
   "ActorMapping": {
     "Reference": ["optical"],
-    "Head": ["LFHD", "LBHD", "RFHD", "RBHD"],
+    "Head": ["LFHD", "LBHD", "RFHD", "RBHD", "ARIEL"],
     "Chest": ["C7", "T10", "LT10", "RT10", "CLAV", "STRN"],
     "Hips": ["LFWT", "LMWT", "LBWT", "RFWT", "RMWT", "RBWT"],
     "LeftShoulder": ["LFSH", "LTSH", "LBSH"],
@@ -59,7 +59,7 @@
     "RightHandPinky1": ["RPNK6"]
   },
   "FittingMarkers": {
-    "HeadTop": ["LFHD", "RFHD", "LBHD", "RBHD"],
+    "HeadTop": ["ARIEL", "LFHD", "RFHD", "LBHD", "RBHD"],
     "Waist": ["LFWT", "RFWT", "LBWT", "RBWT"],
     "LeftAnkle": ["LANK"],
     "RightAnkle": ["RANK"]

@@ -284,6 +284,7 @@ def OnCreateAndFitClick(control, event):
     FBSystem().Scene.Evaluate()
     
     # 2. Scale the Actor based on Height Proportions
+    hips_h = 89.6
     if p_hips:
         hips_h = (p_hips[1] + r_hips_offset[1]) - floor_y
         set_prop(actor, "Hips Height", hips_h)
@@ -299,6 +300,10 @@ def OnCreateAndFitClick(control, event):
             # Based on standard 170cm Actor relative pivot values
             S = total_h / 170.0
             
+            # --- Dynamic Leg Scale (Prevent Floor Penetration) ---
+            # Total standard Y drop from Base Hip to Ankle is 3.6 + 42.7 + 43.3 = 89.6
+            S_leg = hips_h / 89.6 if hips_h > 0 else S
+            
             def set_actor_pivot(prop_name, pos):
                 prop = actor.PropertyList.Find(prop_name)
                 if prop:
@@ -307,13 +312,13 @@ def OnCreateAndFitClick(control, event):
                         try: prop.Data = [pos[0], pos[1], pos[2]]
                         except: pass
             
-            # Legs
-            set_actor_pivot("LeftHipPosition", [9.60 * S, -3.60 * S, 7.30 * S])
-            set_actor_pivot("RightHipPosition", [-9.60 * S, -3.60 * S, 7.30 * S])
-            set_actor_pivot("LeftKneePosition", [0.0, -42.70 * S, -0.40 * S])
-            set_actor_pivot("RightKneePosition", [0.0, -42.70 * S, -0.40 * S])
-            set_actor_pivot("LeftAnklePosition", [0.0, -43.30 * S, -2.20 * S])
-            set_actor_pivot("RightAnklePosition", [0.0, -43.30 * S, -2.20 * S])
+            # Legs (Use S_leg for Y axis drops to ensure perfect ankle alignment with floor_y)
+            set_actor_pivot("LeftHipPosition", [9.60 * S, -3.60 * S_leg, 7.30 * S])
+            set_actor_pivot("RightHipPosition", [-9.60 * S, -3.60 * S_leg, 7.30 * S])
+            set_actor_pivot("LeftKneePosition", [0.0, -42.70 * S_leg, -0.40 * S])
+            set_actor_pivot("RightKneePosition", [0.0, -42.70 * S_leg, -0.40 * S])
+            set_actor_pivot("LeftAnklePosition", [0.0, -43.30 * S_leg, -2.20 * S])
+            set_actor_pivot("RightAnklePosition", [0.0, -43.30 * S_leg, -2.20 * S])
             
             # Arms (Note: FBActor internal prop names differ from UI bone names)
             # UI: Left Shoulder -> Prop: LeftCollarPosition
@@ -552,23 +557,38 @@ def OnSetPostProcessClick(control, event):
 def OnSmoothClick(control, event):
     ApplyFilterToSelectedMarkers("Smooth")
 
-def OnResetClick(control, event):
-    for a in list(FBSystem().Scene.Actors):
-        if a.Name.startswith("Actor_") or a.Name == "Optical_Actor": a.FBDelete()
-    for ms in list(FBSystem().Scene.MarkerSets):
-        if ms.Name.startswith("MarkerSet_") or ms.Name == "Optical_MarkerSet": ms.FBDelete()
-        
-    for root in get_optical_roots():
-        for rb in list(root.RigidBodies):
-            rb.FBDelete()
-    
-    # Safely delete Guide Nulls under RootModel
-    for m in list(FBSystem().Scene.RootModel.Children):
+def _safe_delete(delete_func):
+    """ Helper to repeatedly find and delete to avoid C++ pointer crashes """
+    while True:
         try:
-            if m.Name.startswith("Guide_"): m.FBDelete()
-        except:
-            pass
-    status("Scene Reset.")
+            if not delete_func(): break
+        except: break
+
+def OnDeleteActorClick(control, event):
+    # Unselect everything
+    selected = FBModelList(); FBGetSelectedModels(selected)
+    for m in selected: m.Selected = False
+
+    def del_actor():
+        for a in FBSystem().Scene.Actors:
+            if a.Name.startswith("Actor_") or a.Name == "Optical_Actor":
+                try: a.MarkerSet = None; set_prop(a, "Active", False)
+                except: pass
+                a.FBDelete()
+                return True
+        return False
+    _safe_delete(del_actor)
+
+    def del_ms():
+        for ms in FBSystem().Scene.MarkerSets:
+            if ms.Name.startswith("MarkerSet_") or ms.Name == "Optical_MarkerSet":
+                ms.FBDelete()
+                return True
+        return False
+    _safe_delete(del_ms)
+    
+    FBSystem().Scene.Evaluate()
+    status("Actor & MarkerSets Deleted.")
 
 # ── UI Construction ───────────────────────────────────────────────────────────
 
@@ -683,7 +703,7 @@ def PopulateTool(tool):
     lyt_actor.Add(btn("Activate Mapping", OnActivateClick), 40)
     
     lyt_actor.Add(lbl("---"), 15)
-    lyt_actor.Add(btn("Reset / Delete All", OnResetClick), 35)
+    lyt_actor.Add(btn("Delete Actor & MarkerSet", OnDeleteActorClick), 35)
     
     g_ui["lbl_status"] = FBLabel(); g_ui["lbl_status"].Caption = "Status: Ready."; lyt_actor.Add(g_ui["lbl_status"], 30)
 
