@@ -122,6 +122,16 @@ def get_board_root():
     return None
 
 def OnGenerateBoardClick(control, event):
+    models = FBModelList()
+    FBGetSelectedModels(models, None, True, True)
+    if len(models) == 0:
+        FBMessageBox("Error", "Please select a target model (e.g., face mesh) first to position the rig.", "OK")
+        return
+    
+    target_model = models[0]
+    pos = FBVector3d()
+    target_model.GetVector(pos, FBModelTransformationType.kModelTranslation, True)
+
     root = get_board_root()
     if root:
         if FBMessageBox("Warning", "FaceBoard already exists. Re-generate?", "Yes", "No") == 2:
@@ -132,8 +142,8 @@ def OnGenerateBoardClick(control, event):
     root.Show = True
     root.Size = 100.0
     
-    # Place root to the side of the scene
-    root.Translation = FBVector3d(150, 150, 0)
+    # Place root near the selected model
+    root.Translation = FBVector3d(pos[0] + 50.0, pos[1], pos[2])
 
     for ctrl_name, cfg in FACE_BOARD_CONFIG.items():
         ctrl = FBModelMarker("Ctrl_" + ctrl_name)
@@ -316,8 +326,13 @@ def OnBakeToRigClick(control, event):
     step = FBTime(0, 0, 0, 1) # 1 frame
     curr = FBTime(start)
     
+    import time
+    layer_name = "Facial_Bake_to_Rig_" + time.strftime("%H%M%S")
+    layer = FBSystem().CurrentTake.CreateLayer(layer_name)
+    FBSystem().CurrentTake.SetCurrentLayer(layer.GetLayerIndex())
+    
     progress = FBProgress()
-    progress.Caption = "Baking Blendshapes to Rig..."
+    progress.Caption = "Baking Blendshapes to Rig (Layer: {})...".format(layer_name)
     
     # We need to temporarily disable the Relation Constraint to prevent feedback
     rel_name = "Facial_CtrlRig_Link"
@@ -370,7 +385,65 @@ def OnBakeToRigClick(control, event):
         
     if relation: relation.Active = True
     progress.Done()
-    FBMessageBox("Success", "Baking Complete!", "OK")
+    g_ui["lbl_status"].Caption = "Baked BS to Rig (Layer: {})".format(layer_name)
+    FBMessageBox("Success", "Baking Complete on new layer:\n{}".format(layer_name), "OK")
+
+def OnBakeToBSClick(control, event):
+    root = get_board_root()
+    if not root: return
+    
+    models = FBModelList()
+    FBGetSelectedModels(models, None, True, True)
+    if len(models) == 0:
+        FBMessageBox("Error", "Select the target model to bake TO.", "OK")
+        return
+        
+    target_model = models[0]
+    take = FBSystem().CurrentTake
+    span = take.LocalTimeSpan
+    start = span.GetStart()
+    end = span.GetEnd()
+    
+    import time
+    layer_name = "Facial_Bake_to_BS_" + time.strftime("%H%M%S")
+    layer = FBSystem().CurrentTake.CreateLayer(layer_name)
+    FBSystem().CurrentTake.SetCurrentLayer(layer.GetLayerIndex())
+    
+    step = FBTime(0, 0, 0, 1)
+    curr = FBTime(start)
+    
+    progress = FBProgress()
+    progress.Caption = "Baking Rig to Blendshapes (Layer: {})...".format(layer_name)
+    
+    rel_name = "Facial_CtrlRig_Link"
+    relation = None
+    for c in FBSystem().Scene.Constraints:
+        if c.Name == rel_name:
+            relation = c; break
+            
+    # Keep relation active so we can read the evaluated BS values?
+    # No, we want to read the evaluated values from the Rig, but key them directly on the BS.
+    # Actually, if relation is active, the BS properties will be driven by the constraint and we can just Key() them.
+    # But to prevent the relation from overriding our new keys after baking, we might want to disable it afterwards.
+    
+    while curr <= end:
+        FBSystem().LocalTime = curr
+        FBSystem().Scene.Evaluate()
+        
+        # Key all BS properties that have animation nodes
+        for prop in target_model.PropertyList:
+            if prop.IsUserProperty() or prop.Name in ARKIT_52:
+                # To key a driven property, we must key it in the current layer
+                try:
+                    prop.Key()
+                except:
+                    pass
+        curr += step
+        
+    if relation: relation.Active = False
+    progress.Done()
+    g_ui["lbl_status"].Caption = "Baked Rig to BS (Layer: {})".format(layer_name)
+    FBMessageBox("Success", "Baking Complete on new layer:\n{}\n\nRelation Constraint has been disabled so you can view the baked result.", "OK")
 
 def OnResetRigClick(control, event):
     root = get_board_root()
@@ -388,7 +461,7 @@ def OnResetRigClick(control, event):
 
 def PopulateTool(tool):
     tool.StartSizeX = 300
-    tool.StartSizeY = 350
+    tool.StartSizeY = 380
     
     ly = FBVBoxLayout()
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft, "")
@@ -407,8 +480,11 @@ def PopulateTool(tool):
     b2 = FBButton(); b2.Caption = "2. Connect Rig to Selection"; b2.OnClick.Add(OnConnectRigClick)
     ly.Add(b2, 40)
     
-    b3 = FBButton(); b3.Caption = "3. Bake Animation to Rig"; b3.OnClick.Add(OnBakeToRigClick)
+    b3 = FBButton(); b3.Caption = "3. Bake BS to Rig (Inverse)"; b3.OnClick.Add(OnBakeToRigClick)
     ly.Add(b3, 40)
+    
+    b3_fwd = FBButton(); b3_fwd.Caption = "4. Bake Rig to BS (Forward)"; b3_fwd.OnClick.Add(OnBakeToBSClick)
+    ly.Add(b3_fwd, 40)
     
     b4 = FBButton(); b4.Caption = "Reset Rig Positions"; b4.OnClick.Add(OnResetRigClick)
     ly.Add(b4, 40)
