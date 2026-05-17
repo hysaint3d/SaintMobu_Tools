@@ -1177,7 +1177,7 @@ def PopulateTool(tool):
     g_sliders = []
 
     tool.StartSizeX = 820
-    tool.StartSizeY = 560
+    tool.StartSizeY = 670
 
     outer = FBVBoxLayout()
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft,   "")
@@ -1217,8 +1217,7 @@ def PopulateTool(tool):
 
     # Status
     g_lbl_status = FBLabel(); g_lbl_status.Caption = "Ready. Connect mesh → Generate Master Ctrl → Key Frame."
-    outer.Add(g_lbl_status, 20)
-    outer.Add(FBLabel(), 4)
+    outer.Add(g_lbl_status, 22)
 
     # Slider area
     slider_row = FBHBoxLayout()
@@ -1252,11 +1251,14 @@ def PopulateTool(tool):
         grp_box = FBVBoxLayout()
         col.Add(grp_box, len(subs) * 24 + 28)
         
-        # Group Header Label
+        # Group Header Label wrapped in a horizontal layout to force 100% width stretching
+        hdr_row = FBHBoxLayout()
+        grp_box.Add(hdr_row, 20)
+        
         lbl = FBLabel()
         lbl.Caption = "── {} ──".format(grp_label)
         lbl.Justify = FBTextJustify.kFBTextJustifyCenter
-        grp_box.Add(lbl, 20)
+        hdr_row.AddRelative(lbl, 1.0)
         
         # Horizontal Sliders stacked vertically
         for sub_label, pos_bs, neg_bs in subs:
