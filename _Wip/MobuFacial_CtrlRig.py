@@ -1255,7 +1255,7 @@ def PopulateTool(tool):
         # Group Header Label
         lbl = FBLabel()
         lbl.Caption = "── {} ──".format(grp_label)
-        lbl.Justify = FBTextJustify.kFBTextJustifyLeft
+        lbl.Justify = FBTextJustify.kFBTextJustifyCenter
         grp_box.Add(lbl, 20)
         
         # Horizontal Sliders stacked vertically
