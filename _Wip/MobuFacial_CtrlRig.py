@@ -1176,9 +1176,8 @@ def PopulateTool(tool):
     global g_sliders, g_lbl_status
     g_sliders = []
 
-    total_sliders = sum(len(s) for _, s in GROUPS)
-    tool.StartSizeX = max(total_sliders * SLIDER_W + len(GROUPS) * GRP_PAD + 30, 850)
-    tool.StartSizeY = 580
+    tool.StartSizeX = 820
+    tool.StartSizeY = 560
 
     outer = FBVBoxLayout()
     x = FBAddRegionParam(0, FBAttachType.kFBAttachLeft,   "")
@@ -1225,27 +1224,63 @@ def PopulateTool(tool):
     slider_row = FBHBoxLayout()
     outer.AddRelative(slider_row, 1.0)
 
+    # 3 Column layout: Left (Screen Left / Char Right), Center (Unified), Right (Screen Right / Char Left)
+    left_col = FBVBoxLayout(); slider_row.Add(left_col, 250)
+    center_col = FBVBoxLayout(); slider_row.Add(center_col, 280)
+    right_col = FBVBoxLayout(); slider_row.Add(right_col, 250)
+
+    col_mapping = {
+        "Brow R": left_col,
+        "Eye R": left_col,
+        "Cheek R": left_col,
+        
+        "Brow": center_col,
+        "Look": center_col,
+        "Nose": center_col,
+        "Mouth": center_col,
+        "Jaw": center_col,
+        
+        "Brow L": right_col,
+        "Eye L": right_col,
+        "Cheek L": right_col
+    }
+
     for grp_label, subs in GROUPS:
-        grp_w = len(subs) * SLIDER_W + GRP_PAD
-        col = FBVBoxLayout(); slider_row.Add(col, grp_w)
-        lbl = FBLabel(); lbl.Caption = "[{}]".format(grp_label)
-        lbl.Justify = FBTextJustify.kFBTextJustifyCenter
-        col.Add(lbl, HDR_H)
-        sub_row = FBHBoxLayout(); col.AddRelative(sub_row, 1.0)
+        col = col_mapping.get(grp_label, center_col)
+        
+        # Compact container for the group
+        grp_box = FBVBoxLayout()
+        col.Add(grp_box, len(subs) * 24 + 28)
+        
+        # Group Header Label
+        lbl = FBLabel()
+        lbl.Caption = "── {} ──".format(grp_label)
+        lbl.Justify = FBTextJustify.kFBTextJustifyLeft
+        grp_box.Add(lbl, 20)
+        
+        # Horizontal Sliders stacked vertically
         for sub_label, pos_bs, neg_bs in subs:
             prop_name = _slider_prop_name(grp_label, sub_label)
-            sc = FBVBoxLayout(); sub_row.Add(sc, SLIDER_W)
-            sl = FBLabel(); sl.Caption = sub_label
-            sl.Justify = FBTextJustify.kFBTextJustifyCenter
-            sc.Add(sl, LBL_H)
+            
+            # Row container for label + slider
+            row = FBHBoxLayout()
+            grp_box.Add(row, 20)
+            
+            # Label (Left side)
+            sl = FBLabel()
+            sl.Caption = "  " + sub_label
+            sl.Justify = FBTextJustify.kFBTextJustifyLeft
+            row.Add(sl, 60)
+            
+            # Slider (Right side, horizontal orientation)
             slider = FBSlider()
-            slider.Orientation = FBOrientation.kFBVertical
+            slider.Orientation = FBOrientation.kFBHorizontal
             slider.Min   = -100.0
             slider.Max   =  100.0
             slider.Value =    0.0
             slider.OnChange.Add(on_slider_change)
-            sc.AddRelative(slider, 1.0)
-            # Add slider info to global list, including a None placeholder for the property cache
+            row.AddRelative(slider, 1.0)
+            
             g_sliders.append((slider, prop_name, pos_bs, neg_bs, None))
 
 # ── Entry ─────────────────────────────────────────────────────────────────────
